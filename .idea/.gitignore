@@ -1,0 +1,52 @@
+# Archivos de compilación
+/build/
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+*.log
+
+# Archivos de CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Archivos generados por IntelliJ IDEA
+.idea/
+*.iml
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de pruebas o temporales
+*.tmp
+*.swp
+*.bak
+*.old
+
+# Archivos de datos generados
+*.csv
+*.json
+*.xml
+*.txt
+*.dat
+
+# Parámetros o archivos de configuración de entrada/salida
+data/*.in
+data/*.out
+
+# Default ignored files
+/shelf/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
