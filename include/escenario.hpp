@@ -2,7 +2,7 @@
 #define ESCENARIO_HPP
 
 struct Escenario {
-    int hora;
+    double hora;
     double energia_eolica;
 };
 
