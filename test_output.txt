@@ -1,0 +1,13 @@
+=== ANALIZADOR MASIVO CON TRANSICIONES ===
+Procesando 10 combinaciones...
+Progreso: [----------] 0%
+Progreso: [==========] 100.0% | Casos: 10/10 | Válidos: 10 | Mejor: 110.0 | Tasa: inf c/s | ETA: 0m0s
+
+=== PROCESAMIENTO COMPLETADO ===
+Combinaciones procesadas: 10
+Tiempo total: 0 segundos
+Tasa promedio: inf combinaciones/segundo
+Soluciones válidas: 10 (100.0%)
+Mejor costo encontrado: 110.0 (combinación #3)
+Costo promedio: 116.50
+Resultados con transiciones guardados en: resultados_demo.csv
