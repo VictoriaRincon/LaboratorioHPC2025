@@ -14,9 +14,10 @@ echo "3. Análisis mediano (100,000 combinaciones) - <1 segundo"
 echo "4. Análisis grande (1,000,000 combinaciones) - ~4 segundos"
 echo "5. Análisis por lotes personalizado"
 echo "6. Análisis completo (16,777,216 combinaciones) - ~1 minuto"
+echo "7. Análisis completo MPI (16,777,216 combinaciones) - ~15-30 segundos"
 echo ""
 
-read -p "Selecciona una opción (1-6): " opcion
+read -p "Selecciona una opción (1-7): " opcion
 
 case $opcion in
     1)
@@ -168,6 +169,141 @@ case $opcion in
         fi
         ;;
         
+    7)
+        echo ""
+        echo "⚡ ANÁLISIS COMPLETO MPI EXTREMO"
+        echo "Combinaciones: 16,777,216"
+        echo "Versión paralelizada con Message Passing Interface"
+        echo "Tiempo estimado: ~15-30 segundos (dependiendo del número de procesos)"
+        echo ""
+        
+        # Verificar si MPI está disponible
+        if ! command -v mpirun &> /dev/null; then
+            echo "❌ ERROR: MPI no está instalado"
+            echo "Para instalar en macOS: brew install open-mpi"
+            echo "Para instalar en Ubuntu: sudo apt-get install openmpi-bin openmpi-dev"
+            exit 1
+        fi
+        
+        if ! command -v mpicxx &> /dev/null; then
+            echo "❌ ERROR: Compilador MPI (mpicxx) no está disponible"
+            exit 1
+        fi
+        
+        # Detectar número de CPUs disponibles
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            num_cpus=$(sysctl -n hw.ncpu)
+        else
+            # Linux
+            num_cpus=$(nproc)
+        fi
+        
+        echo "✅ MPI detectado correctamente"
+        echo "CPUs detectadas: $num_cpus"
+        procesos_recomendados=$((num_cpus > 16 ? 16 : num_cpus))
+        echo "Procesos recomendados: $procesos_recomendados"
+        echo ""
+        
+        read -p "Número de procesos MPI a usar [$procesos_recomendados]: " num_procesos
+        num_procesos=${num_procesos:-$procesos_recomendados}
+        
+        # Verificar si vale la pena usar MPI
+        if [ $num_procesos -le 1 ]; then
+            echo ""
+            echo "⚠️  ADVERTENCIA: Con 1 proceso, MPI será más lento que la versión secuencial"
+            echo "Se recomienda usar al menos 2 procesos para obtener beneficios de MPI"
+            echo ""
+            read -p "¿Deseas usar la versión secuencial (opción 6) en su lugar? (S/n): " usar_secuencial
+            if [ "$usar_secuencial" != "n" ] && [ "$usar_secuencial" != "N" ]; then
+                echo ""
+                echo "🚀 EJECUTANDO VERSIÓN SECUENCIAL..."
+                tiempo_inicio=$(date +%s)
+                echo "16777216" | ./demo_analisis_con_transiciones
+                tiempo_fin=$(date +%s)
+                duracion=$((tiempo_fin - tiempo_inicio))
+                echo ""
+                echo "✅ Análisis secuencial completado en $duracion segundos"
+                mv resultados_demo.csv resultados/analisis_secuencial_$(date +%Y%m%d_%H%M%S).csv
+                exit 0
+            fi
+        fi
+        
+        echo ""
+        read -p "¿Estás COMPLETAMENTE seguro? (escribir 'CONFIRMO'): " confirm
+        
+        if [ "$confirm" = "CONFIRMO" ]; then
+            # Compilar versión MPI si no existe o está desactualizada
+            if [ ! -f demo_analisis_con_transiciones_mpi ] || [ src/demo_analisis_con_transiciones_mpi.cpp -nt demo_analisis_con_transiciones_mpi ]; then
+                echo ""
+                echo "🔨 Compilando versión MPI optimizada..."
+                mpicxx -std=c++17 -Wall -Wextra -Iinclude -O3 -march=native \
+                       -DNDEBUG -ffast-math \
+                       src/demo_analisis_con_transiciones_mpi.cpp \
+                       src/escenario.cpp \
+                       src/calculador_costos.cpp \
+                       -o demo_analisis_con_transiciones_mpi
+                
+                if [ $? -ne 0 ]; then
+                    echo "❌ Error en la compilación MPI"
+                    exit 1
+                fi
+                echo "✅ Compilación MPI optimizada exitosa"
+            fi
+            
+            echo ""
+            echo "🚀 INICIANDO ANÁLISIS COMPLETO MPI..."
+            echo "Procesos MPI: $num_procesos"
+            
+            # Calcular distribución óptima de trabajo
+            combinaciones_totales=16777216
+            combinaciones_por_proceso=$((combinaciones_totales / num_procesos))
+            resto=$((combinaciones_totales % num_procesos))
+            
+            echo "Combinaciones por proceso: $combinaciones_por_proceso"
+            if [ $resto -ne 0 ]; then
+                echo "Combinaciones extras en último proceso: $resto"
+            fi
+            
+            # Configurar variables de entorno para optimizar MPI
+            export OMP_NUM_THREADS=1  # Evitar conflictos con OpenMP
+            export MPI_BUFFER_SIZE=1024  # Buffer pequeño para reducir latencia
+            
+            echo ""
+            tiempo_inicio=$(date +%s)
+            
+            # Usar parámetros optimizados para MPI
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # macOS - usar bind-to none para mejor rendimiento en sistemas pequeños
+                echo "16777216" | mpirun -np $num_procesos --bind-to none --map-by core ./demo_analisis_con_transiciones_mpi
+            else
+                # Linux - usar configuración optimizada
+                echo "16777216" | mpirun -np $num_procesos --bind-to core --map-by core ./demo_analisis_con_transiciones_mpi
+            fi
+            
+            tiempo_fin=$(date +%s)
+            duracion=$((tiempo_fin - tiempo_inicio))
+            
+            echo ""
+            echo "🎉 ANÁLISIS COMPLETO MPI FINALIZADO"
+            echo "Tiempo total: $duracion segundos ($((duracion/60))m ${duracion%60}s)"
+            
+            # Calcular y mostrar speedup real
+            if [ -f "tiempo_secuencial.txt" ]; then
+                tiempo_secuencial=$(cat tiempo_secuencial.txt)
+                speedup_real=$(echo "scale=2; $tiempo_secuencial / $duracion" | bc -l 2>/dev/null || echo "N/A")
+                echo "Speedup real vs versión secuencial: ${speedup_real}x"
+            else
+                echo "Speedup teórico estimado: ~${num_procesos}x"
+                echo "NOTA: Ejecuta primero la opción 6 para obtener speedup real"
+            fi
+            
+            mv resultados_demo.csv resultados/analisis_mpi_completo_$(date +%Y%m%d_%H%M%S).csv
+        else
+            echo "Análisis cancelado"
+        fi
+        ;;
+        
     *)
         echo "Opción inválida"
         exit 1
@@ -190,3 +326,4 @@ echo "  sort -t, -k3 -n resultados/archivo.csv | head -10"
 echo ""
 echo "  # Analizar patrones de transiciones:"
 echo "  ./scripts/analizar_resultados.sh resultados/archivo.csv"
+echo ""

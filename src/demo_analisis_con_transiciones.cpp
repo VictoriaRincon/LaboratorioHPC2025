@@ -1,5 +1,5 @@
-#include "calculador_costos.hpp"
-#include "escenario.hpp"
+#include "../include/calculador_costos.hpp"
+#include "../include/escenario.hpp"
 #include <iostream>
 #include <fstream>
 #include <bitset>

@@ -41,7 +41,7 @@ OFF/FRIO     → ON/FRIO      | OFF/FRIO
 
 ### Enfoque de Programación Dinámica
 
-El algoritmo utiliza un enfoque recursivo con memoización que:
+El algoritmo utiliza un enfoque recursivo con memorización que:
 
 1. **Inicia desde la hora 23** y trabaja hacia atrás hasta la hora 0
 2. **Evalúa transiciones válidas** según las reglas de la máquina de estados
