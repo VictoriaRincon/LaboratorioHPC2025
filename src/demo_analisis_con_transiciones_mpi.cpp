@@ -67,16 +67,6 @@ std::string generarTransiciones(const std::vector<EstadoMaquina> &estados) {
   return ss.str();
 }
 
-// Estructura para almacenar resultados de cada combinación
-struct ResultadoCombinacion {
-  uint32_t combinacion_id;
-  double costo_total;
-  bool es_valida;
-  int horas_criticas;
-  std::string patron_eolica;
-  std::string transiciones;
-};
-
 int main(int argc, char *argv[]) {
   // Inicializar MPI
   MPI_Init(&argc, &argv);
@@ -112,6 +102,15 @@ int main(int argc, char *argv[]) {
   uint32_t fin_local =
       inicio_local + combinaciones_por_proceso + (rank < resto ? 1 : 0);
   uint32_t num_locales = fin_local - inicio_local;
+
+  // Abrir archivo temporal inmediatamente para escribir resultados
+  std::string archivo_temp = "resultados_temp_" + std::to_string(rank) + ".csv";
+  std::ofstream archivo_local(archivo_temp);
+  
+  if (!archivo_local.is_open()) {
+    std::cerr << "Error: No se pudo crear archivo temporal: " << archivo_temp << std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
 
   // Demanda fija según especificación del usuario
   std::vector<double> demanda_fija = {
@@ -153,6 +152,28 @@ int main(int argc, char *argv[]) {
     Solucion solucion = calculador.resolver();
     std::cout.rdbuf(old_cout);
 
+    // Contar horas críticas
+    int horas_criticas = 0;
+    for (int hora = 0; hora < 24; hora++) {
+      if (!escenario.demandaCubiertaConEO(hora)) {
+        horas_criticas++;
+      }
+    }
+
+    // Generar cadena de transiciones
+    std::string transiciones = "";
+    if (solucion.es_valida) {
+      transiciones = generarTransiciones(solucion.estados_por_hora);
+    }
+
+    // Escribir resultado directamente al archivo temporal
+    archivo_local << combinacion << ","
+                  << patron_eolica.to_string() << ","
+                  << std::fixed << std::setprecision(2) << solucion.costo_total << ","
+                  << (solucion.es_valida ? "SI" : "NO") << ","
+                  << horas_criticas << ","
+                  << transiciones << "\n";
+
     // Actualizar estadísticas locales
     if (solucion.es_valida) {
       soluciones_validas_local++;
@@ -181,8 +202,37 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Cerrar archivo temporal
+  archivo_local.close();
+
   // Sincronizar todos los procesos
   MPI_Barrier(MPI_COMM_WORLD);
+
+  // Solo el proceso 0 combina todos los archivos
+  if (rank == 0) {
+    std::ofstream archivo_final("resultados_demo.csv");
+    archivo_final << "CombinacionID,PatronEolica,CostoTotal,SolucionValida,HorasCriticas,Transiciones\n";
+    
+    // Leer y combinar todos los archivos temporales EN ORDEN
+    for (int r = 0; r < size; r++) {
+      std::string archivo_temp_r = "resultados_temp_" + std::to_string(r) + ".csv";
+      std::ifstream archivo_temp_read(archivo_temp_r);
+      
+      if (archivo_temp_read.is_open()) {
+        std::string linea;
+        while (std::getline(archivo_temp_read, linea)) {
+          archivo_final << linea << "\n";
+        }
+        archivo_temp_read.close();
+        
+        // Eliminar archivo temporal
+        std::remove(archivo_temp_r.c_str());
+      } else {
+        std::cerr << "Advertencia: No se pudo leer archivo temporal: " << archivo_temp_r << std::endl;
+      }
+    }
+    archivo_final.close();
+  }
 
   // Recopilar estadísticas globales
   uint32_t soluciones_validas_global;
@@ -197,8 +247,7 @@ int main(int argc, char *argv[]) {
   MPI_Reduce(&mejor_costo_local, &mejor_costo_global, 1, MPI_DOUBLE, MPI_MIN, 0,
              MPI_COMM_WORLD);
 
-  // Para encontrar la combinación óptima global, necesitamos un enfoque más
-  // elaborado
+  // Para encontrar la combinación óptima global
   struct {
     double costo;
     int rank;
@@ -247,6 +296,8 @@ int main(int argc, char *argv[]) {
       std::cout << "Costo promedio: " << std::fixed << std::setprecision(2)
                 << costo_promedio << "\n";
     }
+    
+    std::cout << "Resultados con transiciones guardados en: resultados_demo.csv\n";
   }
 
   MPI_Finalize();

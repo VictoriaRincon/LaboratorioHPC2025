@@ -180,8 +180,8 @@ case $opcion in
         # Verificar si MPI está disponible
         if ! command -v mpirun &> /dev/null; then
             echo "❌ ERROR: MPI no está instalado"
-            echo "Para instalar en macOS: brew install open-mpi"
-            echo "Para instalar en Ubuntu: sudo apt-get install openmpi-bin openmpi-dev"
+            echo "Para instalar en macOS: brew install mpich (o open-mpi)"
+            echo "Para instalar en Ubuntu: sudo apt-get install libmpich-dev (o openmpi-bin openmpi-dev)"
             exit 1
         fi
         
@@ -201,8 +201,9 @@ case $opcion in
         
         echo "✅ MPI detectado correctamente"
         echo "CPUs detectadas: $num_cpus"
-        procesos_recomendados=$((num_cpus > 16 ? 16 : num_cpus))
-        echo "Procesos recomendados: $procesos_recomendados"
+        # Usar máximo 4 procesos para evitar problemas de memoria
+        procesos_recomendados=$((num_cpus > 4 ? 4 : num_cpus))
+        echo "Procesos recomendados: $procesos_recomendados (máximo 4 para evitar problemas de memoria)"
         echo ""
         
         read -p "Número de procesos MPI a usar [$procesos_recomendados]: " num_procesos
@@ -274,8 +275,9 @@ case $opcion in
             
             # Usar parámetros optimizados para MPI
             if [[ "$OSTYPE" == "darwin"* ]]; then
-                # macOS - usar bind-to none para mejor rendimiento en sistemas pequeños
-                echo "16777216" | mpirun -np $num_procesos --bind-to none --map-by core ./demo_analisis_con_transiciones_mpi
+                # macOS - usar configuración simple para mejor compatibilidad
+                echo "16777216" | mpirun -np $num_procesos ./demo_analisis_con_transiciones_mpi 2>/dev/null || \
+                echo "16777216" | mpirun -np $num_procesos ./demo_analisis_con_transiciones_mpi
             else
                 # Linux - usar configuración optimizada
                 echo "16777216" | mpirun -np $num_procesos --bind-to core --map-by core ./demo_analisis_con_transiciones_mpi
