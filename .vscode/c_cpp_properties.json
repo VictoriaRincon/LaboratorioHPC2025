@@ -1,0 +1,17 @@
+{
+  "configurations": [
+    {
+      "name": "macOS",
+      "includePath": [
+        "/opt/homebrew/include",
+        "/opt/homebrew/Cellar/open-mpi/5.0.8/include",
+        "${workspaceFolder}/**"
+      ],
+      "compilerPath": "/opt/homebrew/bin/mpicc",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "macos-gcc-x64"
+    }
+  ],
+  "version": 4
+}

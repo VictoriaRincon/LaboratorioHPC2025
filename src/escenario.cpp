@@ -1,4 +1,4 @@
-#include "escenario.hpp"
+#include "../include/escenario.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>

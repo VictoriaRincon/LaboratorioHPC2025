@@ -1,4 +1,4 @@
-#include "calculador_costos.hpp"
+#include "../include/calculador_costos.hpp"
 #include <iostream>
 #include <algorithm>
 #include <climits>
