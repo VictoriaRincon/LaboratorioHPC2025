@@ -2,7 +2,9 @@
 
 # Compilador y flags
 CXX = g++
+MPICXX = mpicxx
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2
+MPI_CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -DMPI_BUILD
 DEBUG_FLAGS = -g -DDEBUG
 
 # Directorios
@@ -17,6 +19,8 @@ OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 
 # Nombre del ejecutable
 TARGET = maquina_estados
+TARGET_MPI = analisis_exhaustivo_mpi
+TARGET_BENCHMARK = benchmark_mpi
 
 # Crear directorio obj si no existe
 $(shell mkdir -p $(OBJDIR))
@@ -36,6 +40,44 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@echo "Compilando $<..."
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
+# === REGLAS PARA VERSIÓN MPI ===
+
+# Archivos específicos para MPI
+MPI_SOURCES = $(SRCDIR)/calculador_costos.cpp $(SRCDIR)/escenario.cpp $(SRCDIR)/analisis_exhaustivo_mpi.cpp $(SRCDIR)/main_exhaustivo_mpi.cpp
+MPI_OBJECTS = $(MPI_SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%_mpi.o)
+
+# Compilar versión MPI
+mpi: $(TARGET_MPI)
+
+$(TARGET_MPI): $(MPI_OBJECTS)
+	@echo "Enlazando $(TARGET_MPI)..."
+	$(MPICXX) $(MPI_OBJECTS) -o $(TARGET_MPI)
+	@echo "✅ Compilación MPI exitosa!"
+
+# Compilación de archivos objeto para MPI
+$(OBJDIR)/%_mpi.o: $(SRCDIR)/%.cpp
+	@echo "Compilando $< para MPI..."
+	$(MPICXX) $(MPI_CXXFLAGS) -I$(INCDIR) -c $< -o $@
+
+# === REGLAS PARA BENCHMARK DE RENDIMIENTO ===
+
+# Archivos específicos para Benchmark
+BENCHMARK_SOURCES = $(SRCDIR)/calculador_costos.cpp $(SRCDIR)/escenario.cpp $(SRCDIR)/analisis_exhaustivo_mpi.cpp $(SRCDIR)/main_benchmark_mpi.cpp
+BENCHMARK_OBJECTS = $(BENCHMARK_SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%_benchmark.o)
+
+# Compilar versión Benchmark
+benchmark: $(TARGET_BENCHMARK)
+
+$(TARGET_BENCHMARK): $(BENCHMARK_OBJECTS)
+	@echo "Enlazando $(TARGET_BENCHMARK)..."
+	$(MPICXX) $(BENCHMARK_OBJECTS) -o $(TARGET_BENCHMARK)
+	@echo "✅ Compilación Benchmark exitosa!"
+
+# Compilación de archivos objeto para Benchmark
+$(OBJDIR)/%_benchmark.o: $(SRCDIR)/%.cpp
+	@echo "Compilando $< para Benchmark..."
+	$(MPICXX) $(MPI_CXXFLAGS) -I$(INCDIR) -c $< -o $@
+
 # Versión debug
 debug: CXXFLAGS += $(DEBUG_FLAGS)
 debug: clean $(TARGET)
@@ -51,6 +93,38 @@ test: $(TARGET)
 	@echo "Ejecutando tests automáticos..."
 	@echo "1\n4\n" | ./$(TARGET)
 
+# Ejecutar análisis exhaustivo MPI (modo interactivo)
+run-mpi: $(TARGET_MPI)
+	@echo "Ejecutando análisis exhaustivo con MPI (modo interactivo)..."
+	mpirun -np 4 ./$(TARGET_MPI)
+
+# Test MPI con ejemplo pequeño
+test-mpi: $(TARGET_MPI)
+	@echo "Ejecutando test MPI con longitud 5..."
+	mpirun -np 2 ./$(TARGET_MPI) -l 5
+
+# Ejecutar análisis rápido (para pruebas)
+quick-mpi: $(TARGET_MPI)
+	@echo "Ejecutando análisis rápido (4 bits, 2 procesos)..."
+	mpirun -np 2 ./$(TARGET_MPI) -l 4
+
+# === REGLAS PARA BENCHMARK DE RENDIMIENTO ===
+
+# Ejecutar benchmark interactivo
+run-benchmark: $(TARGET_BENCHMARK)
+	@echo "Ejecutando benchmark de rendimiento (modo interactivo)..."
+	mpirun -np 4 ./$(TARGET_BENCHMARK)
+
+# Benchmark rápido para pruebas
+test-benchmark: $(TARGET_BENCHMARK)
+	@echo "Ejecutando benchmark de prueba (12 bits, 2 procesos)..."
+	mpirun -np 2 ./$(TARGET_BENCHMARK) -b 12 -v
+
+# Benchmark intensivo
+intensive-benchmark: $(TARGET_BENCHMARK)
+	@echo "Ejecutando benchmark intensivo (20 bits, 8 procesos)..."
+	mpirun -np 8 ./$(TARGET_BENCHMARK) -b 20 -c 8 -v
+
 # Crear archivo de ejemplo
 ejemplo: $(DATADIR)/parametros.in
 
@@ -65,7 +139,7 @@ $(DATADIR)/parametros.in:
 # Limpiar archivos generados
 clean:
 	@echo "Limpiando archivos generados..."
-	rm -rf $(OBJDIR)/*.o $(TARGET)
+	rm -rf $(OBJDIR)/*.o $(TARGET) $(TARGET_MPI) $(TARGET_BENCHMARK) *.csv
 	@echo "✅ Limpieza completada!"
 
 # Limpiar todo incluyendo datos
@@ -87,12 +161,20 @@ help:
 	@echo "=== SISTEMA DE OPTIMIZACIÓN DE MÁQUINA DE ESTADOS ==="
 	@echo ""
 	@echo "Comandos disponibles:"
-	@echo "  make         - Compilar el proyecto"
+	@echo "  make         - Compilar el proyecto original"
 	@echo "  make debug   - Compilar versión debug"
-	@echo "  make run     - Compilar y ejecutar"
+	@echo "  make run     - Compilar y ejecutar versión original"
 	@echo "  make test    - Ejecutar tests automáticos"
+	@echo "  make mpi     - Compilar análisis exhaustivo con MPI"
+	@echo "  make run-mpi - Ejecutar análisis exhaustivo MPI (modo interactivo)"
+	@echo "  make test-mpi- Test MPI con longitud 5 (2 procesos)"
+	@echo "  make quick-mpi- Test rápido con longitud 4 (2 procesos)"
+	@echo "  make benchmark - Compilar sistema de benchmark de rendimiento"
+	@echo "  make run-benchmark - Ejecutar benchmark interactivo"
+	@echo "  make test-benchmark - Benchmark de prueba (12 bits, 2 procesos)"
+	@echo "  make intensive-benchmark - Benchmark intensivo (20 bits, 8 procesos)"
 	@echo "  make ejemplo - Crear archivo de ejemplo"
-	@echo "  make clean   - Limpiar archivos objeto y ejecutable"
+	@echo "  make clean   - Limpiar archivos generados"
 	@echo "  make clean-all - Limpiar todo incluyendo datos"
 	@echo "  make info    - Mostrar información del proyecto"
 	@echo "  make help    - Mostrar esta ayuda"
@@ -103,8 +185,10 @@ help:
 	@echo "  $(OBJDIR)/     - Archivos objeto (generados)"
 	@echo "  $(DATADIR)/    - Datos de entrada"
 	@echo ""
-	@echo "Ejemplo de uso:"
+	@echo "Ejemplos de uso:"
 	@echo "  make ejemplo && make run"
+	@echo "  make mpi && make test-mpi"
+	@echo "  make mpi && mpirun -np 2 ./$(TARGET_MPI) -l 5 -o resultados.csv"
 
 # Instalar dependencias (para futuro uso con MPI)
 install-deps:
@@ -112,4 +196,4 @@ install-deps:
 	@echo "⚠️  Para futuras versiones MPI se requerirá: libopenmpi-dev"
 
 # Reglas que no corresponden a archivos
-.PHONY: all debug run test clean clean-all info help ejemplo install-deps 
+.PHONY: all debug run test mpi run-mpi test-mpi quick-mpi benchmark run-benchmark test-benchmark intensive-benchmark clean clean-all info help ejemplo install-deps 
