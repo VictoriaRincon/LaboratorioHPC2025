@@ -115,6 +115,13 @@ public:
     void escribirMetricasProgresivas(const ConfiguracionBenchmark& config, const std::string& estado, double progreso);
     void mostrarResumenBenchmark();
     
+    // Caché distribuido MPI
+    void sincronizarCacheDistribuido();
+    void compartirSufijosEncontrados(const std::vector<int>& combinacion, const std::vector<Estado>& solucion);
+    bool buscarSufijoEnCacheDistribuido(const std::vector<int>& sufijo, std::vector<Estado>& solucionEncontrada);
+    void enviarPatronAOtrosProcesos(const std::vector<int>& patron, const std::vector<Estado>& solucion);
+    void recibirPatronesDeOtrosProcesos();
+    
     // Utilidades originales (mantener compatibilidad)
     std::string formatearEstadoEncendido(Estado estadoAnterior, Estado estadoActual, int posicion);
     std::string analizarTransicion(Estado estadoAnterior, Estado estadoActual, size_t posicion);
@@ -150,6 +157,9 @@ private:
     // Constantes MPI
     static const int TAG_CACHE_SYNC = 100;
     static const int TAG_CACHE_DATA = 101;
+    static const int TAG_CACHE_PATTERN = 102;
+    static const int TAG_CACHE_SOLUTION = 103;
+    static const int TAG_CACHE_COUNT = 104;
     static const int TAG_FINALIZE = 200;
     static const int TAG_METRICS = 300;
 }; 

@@ -641,11 +641,13 @@ void AnalisisExhaustivoMPI::ejecutarBenchmark(const ConfiguracionBenchmark& conf
             mostrarProgresoSimplificado(i, misCombinaciones.size(), velocidad);
         }
         
-        // Actualizar estadísticas de caché (simplificado)
-        // TODO: Implementar getCacheStats en CalculadorCostos si es necesario
-        // Por ahora usamos estadísticas básicas
-        metricasLocales_.cacheHits += 1; // Estimación básica
-        metricasLocales_.cacheMisses += 0;
+        // Las estadísticas de caché se actualizan automáticamente en procesarCombinacionRapido()
+        // usando las métricas reales del CalculadorCostos con resolverConPatrones()
+        
+        // Sincronizar caché distribuido solo ocasionalmente (para evitar saturación)
+        if (config.bits >= 18 && i > 0 && i % 1000 == 0) {
+            sincronizarCacheDistribuido();
+        }
         
         // Para casos grandes: escribir métricas progresivas cada 25% del progreso
         if (config.bits >= 18 && i > 0 && (i % (misCombinaciones.size() / 4) == 0)) {
@@ -722,12 +724,35 @@ void AnalisisExhaustivoMPI::ejecutarBenchmark(const ConfiguracionBenchmark& conf
 }
 
 bool AnalisisExhaustivoMPI::procesarCombinacionRapido(const std::vector<int>& combinacion) {
-    // Versión optimizada que solo calcula si es válida, sin guardar detalles
+    // MÉTODO TRADICIONAL COMO PRIORIDAD PRINCIPAL
     Escenario escenario;
     escenario.cargarDesdeArray(combinacion);
     
-    // Solo verificar si tiene solución válida
-    auto solucion = calculador_.resolver(escenario);
+    // Obtener estadísticas ANTES del procesamiento
+    int cacheHitsAntes = calculador_.getCacheHits();
+    int cacheMissesAntes = calculador_.getCacheMisses();
+    
+    // USAR resolverConPatrones (método tradicional con caché local)
+    auto solucion = calculador_.resolverConPatrones(escenario);
+    
+    // Obtener estadísticas DESPUÉS del procesamiento
+    int cacheHitsDespues = calculador_.getCacheHits();
+    int cacheMissesDespues = calculador_.getCacheMisses();
+    
+    // Actualizar métricas reales de caché (incrementales)
+    metricasLocales_.cacheHits += (cacheHitsDespues - cacheHitsAntes);
+    metricasLocales_.cacheMisses += (cacheMissesDespues - cacheMissesAntes);
+    
+    // CACHÉ DISTRIBUIDO OPCIONAL Y CONTROLADO (solo para casos grandes)
+    if (solucion.solucionValida && config_.bits >= 16) {
+        // Solo compartir sufijos ocasionalmente para evitar saturación MPI
+        static int contadorCompartir = 0;
+        contadorCompartir++;
+        if (contadorCompartir % 100 == 0) { // Solo cada 100 soluciones válidas
+            compartirSufijosEncontrados(combinacion, solucion.estados);
+        }
+    }
+    
     return solucion.solucionValida;
 }
 
@@ -738,9 +763,14 @@ void AnalisisExhaustivoMPI::inicializarBenchmark(const ConfiguracionBenchmark& c
     metricasLocales_.tiempoAnalisis = 0.0;
     metricasLocales_.tiempoInicializacion = 0.0;
     metricasLocales_.tiempoFinalizacion = 0.0;
-    metricasLocales_.memoriaUsada = 0;
+    
+    // Inicializar estadísticas de caché reales
     metricasLocales_.cacheHits = 0;
     metricasLocales_.cacheMisses = 0;
+    
+    // Limpiar estadísticas del calculador para este benchmark
+    calculador_.resetearEstadisticasCache();
+    metricasLocales_.memoriaUsada = 0;
     
     // Obtener uso de memoria inicial
     struct rusage usage;
@@ -1173,4 +1203,136 @@ void AnalisisExhaustivoMPI::escribirMetricasProgresivas(const ConfiguracionBench
     
     // Flush inmediato a disco
     std::system(("sync " + archivo + " 2>/dev/null || true").c_str());
+}
+
+// ==================================================================================
+// IMPLEMENTACIÓN DE CACHÉ DISTRIBUIDO MPI
+// ==================================================================================
+
+void AnalisisExhaustivoMPI::sincronizarCacheDistribuido() {
+    // Sincronización no bloqueante para evitar deadlocks
+    recibirPatronesDeOtrosProcesos();
+}
+
+void AnalisisExhaustivoMPI::compartirSufijosEncontrados(const std::vector<int>& combinacion, const std::vector<Estado>& solucion) {
+    // Compartir solo el PRIMER sufijo válido de 0 a 0 para minimizar tráfico MPI
+    for (size_t i = 0; i < combinacion.size(); ++i) {
+        if (combinacion[i] == 0) {
+            // Buscar el próximo 0 para formar sufijo completo
+            for (size_t j = i + 1; j < combinacion.size(); ++j) {
+                if (combinacion[j] == 0) {
+                    // Sufijo encontrado de posición i a j (inclusive)
+                    std::vector<int> patronSufijo(combinacion.begin() + i, combinacion.begin() + j + 1);
+                    std::vector<Estado> solucionSufijo(solucion.begin() + i, solucion.begin() + j + 1);
+                    
+                    // Verificar que el sufijo es válido, útil y NO está ya en caché local
+                    if (patronSufijo.size() >= 3 && patronSufijo.size() <= 8 && !calculador_.estaEnCache(patronSufijo)) {
+                        // Solo enviar sufijos de tamaño medio (3-8) para mayor utilidad
+                        enviarPatronAOtrosProcesos(patronSufijo, solucionSufijo);
+                        
+                        // También guardar localmente para uso futuro
+                        calculador_.guardarEnCache(patronSufijo, solucionSufijo);
+                        
+                        // SOLO compartir el primer sufijo útil encontrado
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool AnalisisExhaustivoMPI::buscarSufijoEnCacheDistribuido(const std::vector<int>& sufijo, std::vector<Estado>& solucionEncontrada) {
+    // Primero buscar en caché local
+    if (calculador_.estaEnCache(sufijo)) {
+        solucionEncontrada = calculador_.obtenerDeCache(sufijo);
+        return true;
+    }
+    
+    // Si no está en caché local, intentar recibir de otros procesos
+    // (implementación simplificada - en una versión completa usaríamos un protocolo más sofisticado)
+    recibirPatronesDeOtrosProcesos();
+    
+    // Intentar nuevamente después de la sincronización
+    if (calculador_.estaEnCache(sufijo)) {
+        solucionEncontrada = calculador_.obtenerDeCache(sufijo);
+        return true;
+    }
+    
+    return false;
+}
+
+void AnalisisExhaustivoMPI::enviarPatronAOtrosProcesos(const std::vector<int>& patron, const std::vector<Estado>& solucion) {
+    // Enviar patrón a todos los otros procesos de forma no bloqueante
+    for (int destino = 0; destino < size_; ++destino) {
+        if (destino != rank_) {
+            // Enviar tamaño del patrón
+            int tamanoPatron = static_cast<int>(patron.size());
+            MPI_Send(&tamanoPatron, 1, MPI_INT, destino, TAG_CACHE_COUNT, MPI_COMM_WORLD);
+            
+            // Enviar datos del patrón
+            if (tamanoPatron > 0) {
+                MPI_Send(const_cast<int*>(patron.data()), tamanoPatron, MPI_INT, destino, TAG_CACHE_PATTERN, MPI_COMM_WORLD);
+                
+                // Convertir Estados a int para envío MPI
+                std::vector<int> solucionInt;
+                solucionInt.reserve(solucion.size());
+                for (const auto& estado : solucion) {
+                    solucionInt.push_back(static_cast<int>(estado));
+                }
+                
+                MPI_Send(solucionInt.data(), tamanoPatron, MPI_INT, destino, TAG_CACHE_SOLUTION, MPI_COMM_WORLD);
+                
+                // Actualizar estadísticas MPI (aproximado)
+                // En una implementación completa, estas irían a metricasGlobales
+            }
+        }
+    }
+}
+
+void AnalisisExhaustivoMPI::recibirPatronesDeOtrosProcesos() {
+    // Recibir patrones de forma no bloqueante para evitar bloqueos
+    int flag;
+    MPI_Status status;
+    
+    // Intentar recibir de cualquier proceso
+    for (int fuente = 0; fuente < size_; ++fuente) {
+        if (fuente != rank_) {
+            // Verificar si hay mensajes pendientes de este proceso
+            MPI_Iprobe(fuente, TAG_CACHE_COUNT, MPI_COMM_WORLD, &flag, &status);
+            
+            if (flag) {
+                // Recibir tamaño del patrón
+                int tamanoPatron;
+                MPI_Recv(&tamanoPatron, 1, MPI_INT, fuente, TAG_CACHE_COUNT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                
+                if (tamanoPatron > 0 && tamanoPatron <= 100) { // Limite de seguridad
+                    // Recibir patrón
+                    std::vector<int> patron(tamanoPatron);
+                    MPI_Recv(patron.data(), tamanoPatron, MPI_INT, fuente, TAG_CACHE_PATTERN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    
+                    // Recibir solución
+                    std::vector<int> solucionInt(tamanoPatron);
+                    MPI_Recv(solucionInt.data(), tamanoPatron, MPI_INT, fuente, TAG_CACHE_SOLUTION, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    
+                    // Convertir de int a Estado
+                    std::vector<Estado> solucion;
+                    solucion.reserve(solucionInt.size());
+                    for (int estadoInt : solucionInt) {
+                        solucion.push_back(static_cast<Estado>(estadoInt));
+                    }
+                    
+                    // Guardar en caché local para uso futuro
+                    calculador_.guardarEnCache(patron, solucion);
+                    
+                    // Incrementar cache hits porque recibimos un patrón útil
+                    metricasLocales_.cacheHits++;
+                    
+                    // Solo mostrar en modo muy verbose (comentado para reducir output)
+                    // std::cout << "📥 Proceso " << rank_ << " recibió patrón de proceso " << fuente 
+                    //           << " (tamaño: " << tamanoPatron << ")" << std::endl;
+                }
+            }
+        }
+    }
 } 

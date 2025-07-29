@@ -70,6 +70,16 @@ public:
     void limpiarCachePatrones();
     int getTamañoCachePatrones() const;
     void mostrarEstadisticasCache() const;
+    
+    // Métodos para obtener estadísticas de caché
+    int getCacheHits() const;
+    int getCacheMisses() const;
+    void resetearEstadisticasCache();
+    
+    // Métodos públicos para caché distribuido MPI
+    bool estaEnCache(const std::vector<int>& patron) const;
+    std::vector<Estado> obtenerDeCache(const std::vector<int>& patron) const;
+    void guardarEnCache(const std::vector<int>& patron, const std::vector<Estado>& solucion);
 
 private:
     // Algoritmo recursivo principal (versión original)
@@ -85,11 +95,6 @@ private:
     // Aplicación de caché existente
     bool aplicarCacheExistente(const Escenario& escenario);
     void prememoizarPatron(const std::vector<int>& patron, int horaInicio, int horaFin, const Escenario& escenario);
-    
-    // Caché de patrones
-    bool estaEnCache(const std::vector<int>& patron) const;
-    std::vector<Estado> obtenerDeCache(const std::vector<int>& patron) const;
-    void guardarEnCache(const std::vector<int>& patron, const std::vector<Estado>& solucion);
     
     // Validación de transiciones
     std::vector<Estado> getEstadosQueVanA(Estado estadoDestino) const;

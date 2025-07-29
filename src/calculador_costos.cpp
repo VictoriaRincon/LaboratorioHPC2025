@@ -233,6 +233,19 @@ void CalculadorCostos::mostrarEstadisticasCache() const {
     }
 }
 
+int CalculadorCostos::getCacheHits() const {
+    return cachehits;
+}
+
+int CalculadorCostos::getCacheMisses() const {
+    return cachemisses;
+}
+
+void CalculadorCostos::resetearEstadisticasCache() {
+    cachehits = 0;
+    cachemisses = 0;
+}
+
 std::string CalculadorCostos::patronAString(const std::vector<int>& patron) const {
     std::ostringstream oss;
     oss << "{";
