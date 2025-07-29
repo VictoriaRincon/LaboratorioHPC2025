@@ -37,10 +37,14 @@ ResultadoOptimizacion CalculadorCostos::resolverConPatrones(const Escenario& esc
     // Intentar usar caché primero para pre-resolver subsecuencias conocidas
     bool usoCacheExistente = aplicarCacheExistente(escenario);
     
-    if (usoCacheExistente && mostrarDetalles) {
-        std::cout << "Aplicando patrones existentes del caché..." << std::endl;
+    if (usoCacheExistente) {
+        // Cache hit: se encontraron patrones existentes
         cachehits++;
+        if (mostrarDetalles) {
+            std::cout << "Aplicando patrones existentes del caché..." << std::endl;
+        }
     } else {
+        // Cache miss: no se encontraron patrones reutilizables
         cachemisses++;
     }
     

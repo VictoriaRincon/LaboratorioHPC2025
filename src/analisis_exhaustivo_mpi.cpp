@@ -1325,8 +1325,8 @@ void AnalisisExhaustivoMPI::recibirPatronesDeOtrosProcesos() {
                     // Guardar en caché local para uso futuro
                     calculador_.guardarEnCache(patron, solucion);
                     
-                    // Incrementar cache hits porque recibimos un patrón útil
-                    metricasLocales_.cacheHits++;
+                    // NO incrementar cache hits aquí - eso sería artificial
+                    // Los cache hits reales se cuentan cuando resolverConPatrones() usa el caché
                     
                     // Solo mostrar en modo muy verbose (comentado para reducir output)
                     // std::cout << "📥 Proceso " << rank_ << " recibió patrón de proceso " << fuente 
