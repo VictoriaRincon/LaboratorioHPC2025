@@ -1,0 +1,34 @@
+=== ANALIZADOR MASIVO CON CACHE DE PREFIJOS MPI ===
+Procesos MPI: 2
+Procesando 50000 combinaciones con 2 procesos y cache de prefijos...
+Proceso 0 - Progreso: 10.0% | Casos: 2500/25000 | Tasa: 2500 c/s | Cache: 2499H/9MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+Proceso 0 - Progreso: 20.0% | Casos: 5000/25000 | Tasa: 5000 c/s | Cache: 4999H/913MProceso 0 - Progreso: 30.0% | Casos: 7500/25000 | Tasa: 7500 c/s | Cache: 7499H/3413MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+Proceso 0 - Progreso: 40.0% | Casos: 10000/25000 | Tasa: 10000 c/s | Cache: 9999H/7721MProceso 0 - Progreso: 50.0% | Casos: 12500/25000 | Tasa: 12500 c/s | Cache: 12499H/12721MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+Proceso 0 - Progreso: 60.0% | Casos: 15000/25000 | Tasa: 15000 c/s | Cache: 14999H/17721MProceso 0 - Progreso: 70.0% | Casos: 17500/25000 | Tasa: 17500 c/s | Cache: 17499H/23837MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+Proceso 0 - Progreso: 80.0% | Casos: 20000/25000 | Tasa: 20000 c/s | Cache: 19999H/31337MProceso 0 - Progreso: 90.0% | Casos: 22500/25000 | Tasa: 22500 c/s | Cache: 22499H/38837MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+Proceso 0 - Progreso: 100.0% | Casos: 25000/25000 | Tasa: 25000 c/s | Cache: 24999H/46337MIntercambio de cache: recopilados 18 prefijos, distribuyendo 1
+
+
+=== PROCESAMIENTO COMPLETADO ===
+Combinaciones procesadas: 50000
+Procesos MPI utilizados: 2
+Tiempo total: 0 segundos
+Tasa promedio: inf combinaciones/segundo
+Soluciones válidas: 50000 (100.0%)
+Mejor costo encontrado: 110.0 (combinación #3)
+Costo promedio: 116.25
+Resultados con cache guardados en: resultados_demo_cache.csv
+
+=== ESTADÍSTICAS DE CACHE (Proceso 0) ===
+Cache hits: 24999
+Cache misses: 46337
+Tasa de aciertos: 35.0%
+Tamaño del cache: 10 entradas
+Prefijos enviados: 9
+Prefijos recibidos: 1
+
+=== ESTADÍSTICAS GLOBALES DE CACHE ===
+Total hits (todos los procesos): 49998
+Total misses (todos los procesos): 119370
+Total entradas en cache: 20
+Tasa de aciertos global: 29.5%
