@@ -1,2 +1,4 @@
-300 200 100 100 100 200 300 500 800 1000 1000 1000 1000 900 800 800 800 1000 1000 1000 600 600 400 300
-1000 1000 1000 1000 0 1000 1000 0 1000 0 1000 1000 1000 1000 1000 0 1000 1000 1000 1000 0 1000 1000 1000
+# Valores binarios para cada hora (0 hasta hora_final)
+# 0 = Energía eólica insuficiente (requiere generación)
+# 1 = Energía eólica suficiente (no requiere generación)
+1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 1 1 1 1 1
