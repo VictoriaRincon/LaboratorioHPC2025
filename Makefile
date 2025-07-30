@@ -58,6 +58,11 @@ run-file: $(TARGET)
 help-program: $(TARGET)
 	./$(TARGET) --help
 
+# Ejecutar benchmark de rendimiento
+benchmark: $(TARGET)
+	@echo "📊 Ejecutando benchmark de rendimiento..."
+	./$(TARGET) --benchmark
+
 # Limpiar archivos generados
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
@@ -90,6 +95,7 @@ info:
 	@echo "  make test     - Ejecutar pruebas de validación"
 	@echo "  make test-quick - Ejecutar prueba rápida"
 	@echo "  make run-file - Ejecutar con archivo de parámetros"
+	@echo "  make benchmark - Ejecutar benchmark de rendimiento"
 	@echo "  make clean    - Limpiar archivos generados"
 	@echo "  make rebuild  - Recompilar completamente"
 	@echo "  make info     - Mostrar esta información"
@@ -101,6 +107,12 @@ setup:
 	@echo "📁 Configurando estructura del proyecto..."
 	mkdir -p $(SRC_DIR) $(INCLUDE_DIR) $(OBJ_DIR) data resultados
 	@echo "✅ Estructura creada"
+
+# Crear directorio de resultados automáticamente
+$(TARGET): | resultados
+
+resultados:
+	mkdir -p resultados
 
 # Verificar dependencias
 check-deps:
@@ -135,5 +147,6 @@ help:
 # Dependencias de headers
 $(OBJ_DIR)/estados_maquina.o: $(INCLUDE_DIR)/estados_maquina.hpp
 $(OBJ_DIR)/optimizador.o: $(INCLUDE_DIR)/optimizador.hpp $(INCLUDE_DIR)/estados_maquina.hpp
-$(OBJ_DIR)/interfaz_terminal.o: $(INCLUDE_DIR)/interfaz_terminal.hpp $(INCLUDE_DIR)/optimizador.hpp $(INCLUDE_DIR)/estados_maquina.hpp
+$(OBJ_DIR)/benchmark_sistema.o: $(INCLUDE_DIR)/benchmark_sistema.hpp $(INCLUDE_DIR)/optimizador.hpp $(INCLUDE_DIR)/estados_maquina.hpp
+$(OBJ_DIR)/interfaz_terminal.o: $(INCLUDE_DIR)/interfaz_terminal.hpp $(INCLUDE_DIR)/optimizador.hpp $(INCLUDE_DIR)/estados_maquina.hpp $(INCLUDE_DIR)/benchmark_sistema.hpp
 $(OBJ_DIR)/main.o: $(INCLUDE_DIR)/interfaz_terminal.hpp 

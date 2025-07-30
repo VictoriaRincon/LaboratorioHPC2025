@@ -2,6 +2,7 @@
 #define INTERFAZ_TERMINAL_HPP
 
 #include "optimizador.hpp"
+#include "benchmark_sistema.hpp"
 #include <string>
 
 class InterfazTerminal {
@@ -21,6 +22,8 @@ private:
     static void ingresarParametrosManual();
     static void ejecutarPruebaRapida();
     static void ejecutarPruebasValidacion();
+    static void ejecutarBenchmarkRendimiento();
+    static void ejecutarBenchmarkEscalabilidad();
     static void mostrarAyuda();
     
     // Funciones auxiliares

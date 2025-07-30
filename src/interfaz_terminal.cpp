@@ -33,6 +33,12 @@ void InterfazTerminal::ejecutar() {
                 ejecutarPruebasValidacion();
                 break;
             case 5:
+                ejecutarBenchmarkRendimiento();
+                break;
+            case 6:
+                ejecutarBenchmarkEscalabilidad();
+                break;
+            case 7:
                 mostrarAyuda();
                 break;
             case 0:
@@ -58,7 +64,9 @@ void InterfazTerminal::mostrarMenu() {
     std::cout << "2. ⌨️  Ingresar parámetros manualmente" << std::endl;
     std::cout << "3. ⚡ Ejecutar prueba rápida" << std::endl;
     std::cout << "4. 🧪 Ejecutar batería de pruebas de validación" << std::endl;
-    std::cout << "5. ❓ Mostrar ayuda" << std::endl;
+    std::cout << "5. 📊 Benchmark de rendimiento (todas las combinaciones)" << std::endl;
+    std::cout << "6. 📈 Benchmark de escalabilidad (múltiples largos)" << std::endl;
+    std::cout << "7. ❓ Mostrar ayuda" << std::endl;
     std::cout << "0. 🚪 Salir" << std::endl;
     imprimirSeparador();
 }
@@ -83,6 +91,9 @@ void InterfazTerminal::procesarArgumentos(int argc, char* argv[]) {
             return;
         } else if (arg == "--file" || arg == "-f") {
             cargarArchivoParametros();
+            return;
+        } else if (arg == "--benchmark" || arg == "-b") {
+            ejecutarBenchmarkRendimiento();
             return;
         } else {
             std::cout << "❌ Argumento desconocido: " << arg << std::endl;
@@ -221,6 +232,182 @@ void InterfazTerminal::ejecutarPruebasValidacion() {
     std::cout << "✅ Batería de pruebas completada" << std::endl;
 }
 
+void InterfazTerminal::ejecutarBenchmarkRendimiento() {
+    imprimirTitulo("BENCHMARK DE RENDIMIENTO - TODAS LAS COMBINACIONES");
+    
+    std::cout << "Este benchmark genera y resuelve TODAS las combinaciones posibles" << std::endl;
+    std::cout << "de un largo específico para medir el rendimiento del algoritmo." << std::endl;
+    std::cout << std::endl;
+    
+    std::cout << "📊 Largos recomendados por rendimiento:" << std::endl;
+    std::cout << "• 1-8 bits:  Instantáneo (hasta 256 combinaciones)" << std::endl;
+    std::cout << "• 9-12 bits: Rápido (hasta 4,096 combinaciones)" << std::endl;
+    std::cout << "• 13-16 bits: Moderado (hasta 65,536 combinaciones)" << std::endl;
+    std::cout << "• 17-20 bits: Considerable (hasta 1,048,576 combinaciones)" << std::endl;
+    std::cout << "• 21-25 bits: Extremo (hasta 33,554,432 combinaciones)" << std::endl;
+    std::cout << "• 26-30 bits: MASIVO (hasta 1,073,741,824 combinaciones) - ¡Para análisis MPI!" << std::endl;
+    std::cout << std::endl;
+    
+    int largo = leerEntero("Ingrese el largo del problema (bits)", 1, 30);
+    
+    if (largo > 16) {
+        long long combinaciones = 1LL << largo;
+        std::cout << "⚠️  ADVERTENCIA: " << combinaciones << " combinaciones a procesar." << std::endl;
+        
+        if (largo > 20) {
+            std::cout << "🚨 ATENCIÓN: Más de 20 bits puede tomar HORAS o DÍAS." << std::endl;
+            std::cout << "💡 Recomendamos usar MPI para estos casos." << std::endl;
+        }
+        if (largo > 25) {
+            std::cout << "🔥 EXTREMO: Más de 25 bits puede requerir SEMANAS." << std::endl;
+            std::cout << "⚡ Este caso está diseñado para análisis de escalabilidad MPI." << std::endl;
+        }
+        
+        std::cout << "¿Desea continuar? (s/n): ";
+        char respuesta;
+        std::cin >> respuesta;
+        if (respuesta != 's' && respuesta != 'S') {
+            std::cout << "Benchmark cancelado." << std::endl;
+            return;
+        }
+    }
+    
+    bool mostrar_progreso = confirmar("¿Mostrar barra de progreso?");
+    bool exportar_csv = confirmar("¿Exportar resultados a CSV?");
+    
+    std::cout << std::endl;
+    std::cout << "🚀 Iniciando benchmark..." << std::endl;
+    
+    try {
+        auto inicio_benchmark = std::chrono::high_resolution_clock::now();
+        
+        BenchmarkSistema benchmark;
+        benchmark.configurarVerbosidad(true);
+        
+        auto resultado = benchmark.ejecutarBenchmark(largo, mostrar_progreso);
+        
+        auto fin_benchmark = std::chrono::high_resolution_clock::now();
+        auto duracion_total = std::chrono::duration_cast<std::chrono::milliseconds>(fin_benchmark - inicio_benchmark);
+        
+        std::cout << std::endl;
+        benchmark.mostrarResultados(resultado);
+        
+        std::cout << "⏱️  Tiempo total de benchmark (incluyendo overhead): " 
+                  << formatearTiempo(duracion_total.count()) << std::endl;
+        
+        if (exportar_csv) {
+            std::string archivo = "resultados/benchmark_" + std::to_string(largo) + "_bits.csv";
+            benchmark.exportarCSV(resultado, archivo);
+        }
+        
+    } catch (const std::exception& e) {
+        std::cout << "❌ Error durante el benchmark: " << e.what() << std::endl;
+    }
+}
+
+void InterfazTerminal::ejecutarBenchmarkEscalabilidad() {
+    imprimirTitulo("BENCHMARK DE ESCALABILIDAD - ANÁLISIS COMPARATIVO");
+    
+    std::cout << "Este benchmark ejecuta pruebas para múltiples largos" << std::endl;
+    std::cout << "y analiza cómo escala el rendimiento del algoritmo." << std::endl;
+    std::cout << std::endl;
+    
+    int largo_minimo = leerEntero("Largo mínimo", 1, 25);
+    int largo_maximo = leerEntero("Largo máximo", largo_minimo, 30);
+    
+    if (largo_maximo > 15) {
+        std::cout << "⚠️  ADVERTENCIA: Largos mayores a 15 pueden tomar tiempo considerable." << std::endl;
+        if (largo_maximo > 20) {
+            std::cout << "🚨 ATENCIÓN: Largos mayores a 20 pueden tomar HORAS." << std::endl;
+            std::cout << "💡 Considere usar límites de tiempo o MPI para casos extremos." << std::endl;
+        }
+        if (!confirmar("¿Desea continuar?")) {
+            std::cout << "Benchmark cancelado." << std::endl;
+            return;
+        }
+    }
+    
+    bool exportar_resultados = confirmar("¿Exportar resultados completos?");
+    
+    std::cout << std::endl;
+    std::cout << "🚀 Iniciando benchmark de escalabilidad..." << std::endl;
+    std::cout << "Rango: " << largo_minimo << " a " << largo_maximo << " bits" << std::endl;
+    std::cout << std::endl;
+    
+    try {
+        BenchmarkSistema benchmark;
+        benchmark.configurarVerbosidad(false);
+        
+        std::vector<ResultadoBenchmark> resultados;
+        
+        for (int largo = largo_minimo; largo <= largo_maximo; largo++) {
+            std::cout << "📊 Procesando largo " << largo << " bits..." << std::flush;
+            
+            auto inicio = std::chrono::high_resolution_clock::now();
+            auto resultado = benchmark.ejecutarBenchmark(largo, false);
+            auto fin = std::chrono::high_resolution_clock::now();
+            
+            auto duracion = std::chrono::duration_cast<std::chrono::milliseconds>(fin - inicio);
+            
+            resultados.push_back(resultado);
+            
+            std::cout << " ✅ " << resultado.total_combinaciones << " combinaciones en " 
+                      << formatearTiempo(duracion.count()) << std::endl;
+        }
+        
+        std::cout << std::endl;
+        benchmark.mostrarAnalisisEscalabilidad(resultados);
+        
+        if (exportar_resultados) {
+            std::string archivo_base = "resultados/escalabilidad_" + 
+                                     std::to_string(largo_minimo) + "_" + 
+                                     std::to_string(largo_maximo);
+            
+            for (const auto& resultado : resultados) {
+                std::string archivo = archivo_base + "_" + std::to_string(resultado.largo_problema) + ".csv";
+                benchmark.exportarCSV(resultado, archivo);
+            }
+            
+            std::cout << "📁 Resultados exportados a directorio 'resultados/'" << std::endl;
+        }
+        
+        // Predicción de escalabilidad
+        if (resultados.size() >= 3 && largo_maximo < 25) {
+            std::cout << std::endl;
+            int largo_prediccion = leerEntero("¿Predecir rendimiento para qué largo?", largo_maximo + 1, 30);
+            
+            // Predicción simple basada en crecimiento exponencial
+            double factor_promedio = 0.0;
+            for (size_t i = 1; i < resultados.size(); i++) {
+                factor_promedio += resultados[i].tiempo_total_ms / resultados[i-1].tiempo_total_ms;
+            }
+            factor_promedio /= (resultados.size() - 1);
+            
+            double tiempo_predicho = resultados.back().tiempo_total_ms;
+            for (int i = largo_maximo + 1; i <= largo_prediccion; i++) {
+                tiempo_predicho *= factor_promedio;
+            }
+            
+            long long combinaciones_predichas = 1LL << largo_prediccion;
+            
+            std::cout << std::endl;
+            std::cout << "🔮 PREDICCIÓN PARA " << largo_prediccion << " BITS:" << std::endl;
+            std::cout << "Combinaciones: " << combinaciones_predichas << std::endl;
+            std::cout << "Tiempo estimado: " << formatearTiempo(tiempo_predicho) << std::endl;
+            
+            if (tiempo_predicho > 60000) { // Más de 1 minuto
+                std::cout << "⚠️  Tiempo considerable - considere paralelización MPI" << std::endl;
+            }
+            if (tiempo_predicho > 3600000) { // Más de 1 hora
+                std::cout << "🚨 Tiempo extremo (>1 hora) - MPI es OBLIGATORIO para este caso" << std::endl;
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cout << "❌ Error durante el benchmark: " << e.what() << std::endl;
+    }
+}
+
 void InterfazTerminal::mostrarAyuda() {
     imprimirTitulo("AYUDA - SISTEMA DE OPTIMIZACIÓN");
     
@@ -248,6 +435,7 @@ void InterfazTerminal::mostrarAyuda() {
     std::cout << "• --test, -t    : Ejecutar pruebas de validación" << std::endl;
     std::cout << "• --quick, -q   : Ejecutar prueba rápida" << std::endl;
     std::cout << "• --file, -f    : Cargar desde archivo" << std::endl;
+    std::cout << "• --benchmark, -b : Ejecutar benchmark de rendimiento" << std::endl;
     std::cout << std::endl;
     
     std::cout << "ALGORITMO:" << std::endl;
