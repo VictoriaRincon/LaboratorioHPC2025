@@ -1,10 +1,32 @@
 # Makefile para Sistema de Optimización de Máquina de Estados
 # Versión: Secuencial con preparación para MPI
 
+# Detectar sistema operativo
+UNAME_S := $(shell uname -s)
+
 # Compilador y flags
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -g
 INCLUDES = -Iinclude
+
+# Configuración específica para OpenMP
+ifeq ($(UNAME_S),Darwin)
+    # macOS - usar libomp si está disponible
+    ifneq ($(shell brew --prefix libomp 2>/dev/null),)
+        OPENMP_PREFIX = $(shell brew --prefix libomp)
+        CXXFLAGS += -Xpreprocessor -fopenmp -I$(OPENMP_PREFIX)/include
+        LDFLAGS = -lomp -L$(OPENMP_PREFIX)/lib
+    else
+        # Sin OpenMP - compilar con macros vacías
+        CXXFLAGS += -D_OPENMP_DISABLED
+        LDFLAGS = 
+        $(warning OpenMP no disponible. Instalar con: brew install libomp)
+    endif
+else
+    # Linux/otros - usar OpenMP estándar
+    CXXFLAGS += -fopenmp
+    LDFLAGS = -fopenmp
+endif
 
 # Directorios
 SRC_DIR = src
@@ -23,7 +45,7 @@ all: $(TARGET)
 
 # Crear el ejecutable
 $(TARGET): $(OBJECTS) | $(OBJ_DIR)
-	$(CXX) $(OBJECTS) -o $@
+	$(CXX) $(LDFLAGS) $(OBJECTS) -o $@
 	@echo "✅ Compilación exitosa: $(TARGET)"
 
 # Compilar archivos objeto

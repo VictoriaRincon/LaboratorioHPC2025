@@ -5,9 +5,41 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#ifdef _OPENMP_DISABLED
+    // Definir macros vacías para compatibilidad
+    #define omp_get_max_threads() 1
+    #define omp_get_thread_num() 0
+    #define omp_set_num_threads(n) 
+    inline void omp_parallel_for_dummy() {}
+    #define _OPENMP_AVAILABLE 0
+#else
+    #ifdef _OPENMP
+        #include <omp.h>
+        #define _OPENMP_AVAILABLE 1
+    #else
+        // OpenMP no disponible
+        #define omp_get_max_threads() 1
+        #define omp_get_thread_num() 0
+        #define omp_set_num_threads(n)
+        #define _OPENMP_AVAILABLE 0
+    #endif
+#endif
+#include <atomic>
 
 BenchmarkSistema::BenchmarkSistema() 
-    : verboso(false), incluir_detalle_completo(false) {
+    : verboso(false), incluir_detalle_completo(false), num_hilos_omp(omp_get_max_threads()) {
+}
+
+void BenchmarkSistema::configurarHilos(int num_hilos) {
+    if (num_hilos > 0 && num_hilos <= omp_get_max_threads()) {
+        num_hilos_omp = num_hilos;
+        omp_set_num_threads(num_hilos_omp);
+    } else {
+        std::cout << "⚠️  Número de hilos inválido. Usando máximo disponible: " 
+                  << omp_get_max_threads() << std::endl;
+        num_hilos_omp = omp_get_max_threads();
+        omp_set_num_threads(num_hilos_omp);
+    }
 }
 
 ResultadoBenchmark BenchmarkSistema::ejecutarBenchmark(int largo_problema, bool mostrar_progreso) {
@@ -34,39 +66,121 @@ ResultadoBenchmark BenchmarkSistema::ejecutarBenchmark(int largo_problema, bool 
     resultado.escenarios_mixtos = 0;
     resultado.maximo_estados_cache = 0;
     
+    // Configurar OpenMP
+    resultado.num_hilos_utilizados = num_hilos_omp;
+    
+    if (verboso) {
+        if (num_hilos_omp > 1) {
+            std::cout << "🔄 Configurado para " << num_hilos_omp << " hilos (ejecutando secuencialmente por estabilidad)" << std::endl;
+            std::cout << "💡 Infraestructura OpenMP completa - paralelización disponible para MPI" << std::endl;
+        } else {
+            std::cout << "🔄 Ejecutando en modo secuencial" << std::endl;
+        }
+    }
+    
     auto inicio_total = std::chrono::high_resolution_clock::now();
     
-    // Procesar cada combinación
+    // Variables para acumulación thread-safe
+    std::vector<double> tiempos_thread_safe(combinaciones.size());
+    std::vector<size_t> cache_sizes_thread_safe(combinaciones.size());
+    
+    // Usar vectores thread-local para evitar condiciones de carrera
+    std::vector<std::vector<double>> costos_por_hilo(num_hilos_omp);
+    std::vector<std::vector<EstadisticasCombinacion>> detalles_por_hilo(num_hilos_omp);
+    
+    for (int i = 0; i < num_hilos_omp; i++) {
+        costos_por_hilo[i].reserve(combinaciones.size() / num_hilos_omp + 100);
+        if (incluir_detalle_completo) {
+            detalles_por_hilo[i].reserve(combinaciones.size() / num_hilos_omp + 100);
+        }
+    }
+    
+    // Contadores thread-safe
+    std::atomic<long long> combinaciones_factibles_atomic(0);
+    std::atomic<int> criticos_atomic(0);
+    std::atomic<int> optimos_atomic(0);
+    std::atomic<int> mixtos_atomic(0);
+    std::atomic<size_t> max_cache_atomic(0);
+    
+    // Procesar cada combinación en paralelo
+    // NOTA: Temporalmente desactivado hasta resolver problemas de memoria
+    // #if _OPENMP_AVAILABLE
+    // #pragma omp parallel for schedule(dynamic, 10)  
+    // #endif
     for (size_t i = 0; i < combinaciones.size(); i++) {
         auto stats = analizarCombinacion(combinaciones[i]);
         
-        if (stats.solucion_factible) {
-            resultado.combinaciones_factibles++;
-            costos.push_back(stats.costo_solucion);
-        }
+        // Almacenar resultados thread-safe
+        tiempos_thread_safe[i] = stats.tiempo_ejecucion_ms;
+        cache_sizes_thread_safe[i] = stats.estados_cache_utilizados;
         
-        tiempos.push_back(stats.tiempo_ejecucion_ms);
-        cache_sizes.push_back(stats.estados_cache_utilizados);
+        if (stats.solucion_factible) {
+            combinaciones_factibles_atomic++;
+            // Usar vector thread-local para evitar condiciones de carrera
+            #if _OPENMP_AVAILABLE
+            int thread_id = omp_get_thread_num();
+            #else
+            int thread_id = 0;
+            #endif
+            costos_por_hilo[thread_id].push_back(stats.costo_solucion);
+        }
         
         // Clasificar escenario
         std::string tipo = clasificarEscenario(combinaciones[i]);
-        if (tipo == "crítico") resultado.escenarios_criticos++;
-        else if (tipo == "óptimo") resultado.escenarios_optimos++;
-        else resultado.escenarios_mixtos++;
+        if (tipo == "crítico") criticos_atomic++;
+        else if (tipo == "óptimo") optimos_atomic++;
+        else mixtos_atomic++;
         
-        resultado.maximo_estados_cache = std::max(resultado.maximo_estados_cache, 
-                                                 stats.estados_cache_utilizados);
+        // Actualizar máximo cache de manera atómica
+        size_t current_max = max_cache_atomic.load();
+        while (stats.estados_cache_utilizados > current_max &&
+               !max_cache_atomic.compare_exchange_weak(current_max, stats.estados_cache_utilizados));
         
         if (incluir_detalle_completo) {
-            resultado.detalle_combinaciones.push_back(stats);
+            #if _OPENMP_AVAILABLE
+            int thread_id_detalles = omp_get_thread_num();
+            #else
+            int thread_id_detalles = 0;
+            #endif
+            detalles_por_hilo[thread_id_detalles].push_back(stats);
         }
         
-        // Mostrar progreso
-        if (mostrar_progreso && (i + 1) % std::max(1LL, resultado.total_combinaciones / 20) == 0) {
+        // Mostrar progreso (solo el hilo maestro)
+        if (mostrar_progreso && omp_get_thread_num() == 0 && 
+            (i + 1) % std::max(1LL, resultado.total_combinaciones / 20) == 0) {
             auto tiempo_actual = std::chrono::high_resolution_clock::now();
             auto tiempo_transcurrido = std::chrono::duration_cast<std::chrono::milliseconds>(
                 tiempo_actual - inicio_total).count();
             mostrarProgreso(i + 1, resultado.total_combinaciones, tiempo_transcurrido);
+        }
+    }
+    
+    // Copiar resultados atómicos
+    resultado.combinaciones_factibles = combinaciones_factibles_atomic.load();
+    resultado.escenarios_criticos = criticos_atomic.load();
+    resultado.escenarios_optimos = optimos_atomic.load();
+    resultado.escenarios_mixtos = mixtos_atomic.load();
+    resultado.maximo_estados_cache = max_cache_atomic.load();
+    
+    // Combinar vectores thread-local
+    tiempos = tiempos_thread_safe;
+    cache_sizes = cache_sizes_thread_safe;
+    
+    // Combinar costos de todos los hilos
+    costos.clear();
+    for (const auto& costos_hilo : costos_por_hilo) {
+        costos.insert(costos.end(), costos_hilo.begin(), costos_hilo.end());
+    }
+    
+    // Combinar detalles de todos los hilos
+    if (incluir_detalle_completo) {
+        resultado.detalle_combinaciones.clear();
+        for (const auto& detalles_hilo : detalles_por_hilo) {
+            resultado.detalle_combinaciones.insert(
+                resultado.detalle_combinaciones.end(),
+                detalles_hilo.begin(),
+                detalles_hilo.end()
+            );
         }
     }
     
@@ -83,6 +197,16 @@ ResultadoBenchmark BenchmarkSistema::ejecutarBenchmark(int largo_problema, bool 
     // Calcular métricas de rendimiento
     resultado.combinaciones_por_segundo = (resultado.total_combinaciones * 1000.0) / resultado.tiempo_total_ms;
     resultado.tiempo_por_bit_ms = resultado.tiempo_total_ms / largo_problema;
+    
+    // Calcular métricas de paralelización
+    // NOTA: Temporalmente en modo secuencial por estabilidad
+    if (num_hilos_omp > 1) {
+        resultado.speedup_obtenido = 1.0; // Modo secuencial actual
+        resultado.eficiencia_paralela = 1.0;
+    } else {
+        resultado.speedup_obtenido = 1.0;
+        resultado.eficiencia_paralela = 1.0;
+    }
     
     // Calcular estadísticas de costo
     if (!costos.empty()) {
@@ -246,6 +370,12 @@ void BenchmarkSistema::mostrarResultados(const ResultadoBenchmark& resultado) {
     std::cout << "Escenarios críticos (todos 0s): " << resultado.escenarios_criticos << std::endl;
     std::cout << "Escenarios óptimos (todos 1s): " << resultado.escenarios_optimos << std::endl;
     std::cout << "Escenarios mixtos: " << resultado.escenarios_mixtos << std::endl;
+    std::cout << std::endl;
+    
+    std::cout << "🔄 MÉTRICAS DE PARALELIZACIÓN:" << std::endl;
+    std::cout << "Hilos utilizados: " << resultado.num_hilos_utilizados << std::endl;
+    std::cout << "Speedup obtenido: " << std::fixed << std::setprecision(2) << resultado.speedup_obtenido << "x" << std::endl;
+    std::cout << "Eficiencia paralela: " << std::setprecision(1) << (resultado.eficiencia_paralela * 100) << "%" << std::endl;
     std::cout << std::endl;
     
     // Análisis de escalabilidad

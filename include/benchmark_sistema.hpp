@@ -44,6 +44,11 @@ struct ResultadoBenchmark {
     int escenarios_optimos;     // Todos 1s
     int escenarios_mixtos;      // Combinación
     
+    // Métricas de paralelización
+    int num_hilos_utilizados;
+    double eficiencia_paralela;
+    double speedup_obtenido;
+    
     std::vector<EstadisticasCombinacion> detalle_combinaciones;
 };
 
@@ -51,6 +56,9 @@ class BenchmarkSistema {
 public:
     // Constructor
     BenchmarkSistema();
+    
+    // Configurar número de hilos OpenMP
+    void configurarHilos(int num_hilos);
     
     // Ejecutar benchmark completo para un largo dado
     ResultadoBenchmark ejecutarBenchmark(int largo_problema, bool mostrar_progreso = true);
@@ -80,6 +88,7 @@ public:
 private:
     bool verboso;
     bool incluir_detalle_completo;
+    int num_hilos_omp;
     
     // Funciones auxiliares para estadísticas
     double calcularPromedio(const std::vector<double>& valores);

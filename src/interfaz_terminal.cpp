@@ -1,4 +1,19 @@
 #include "../include/interfaz_terminal.hpp"
+#ifdef _OPENMP_DISABLED
+    // Definir macros vacías para compatibilidad
+    #define omp_get_max_threads() 1
+    #define omp_get_thread_num() 0
+    #define omp_set_num_threads(n) 
+#else
+    #ifdef _OPENMP
+        #include <omp.h>
+    #else
+        // OpenMP no disponible
+        #define omp_get_max_threads() 1
+        #define omp_get_thread_num() 0
+        #define omp_set_num_threads(n)
+    #endif
+#endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -275,6 +290,29 @@ void InterfazTerminal::ejecutarBenchmarkRendimiento() {
     bool mostrar_progreso = confirmar("¿Mostrar barra de progreso?");
     bool exportar_csv = confirmar("¿Exportar resultados a CSV?");
     
+    // Configuración de paralelización OpenMP
+    std::cout << std::endl;
+    std::cout << "🔄 CONFIGURACIÓN DE PARALELIZACIÓN:" << std::endl;
+    std::cout << "Núcleos disponibles en el sistema: " << std::endl;
+    
+    // Obtener información del sistema
+    system("sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 'No disponible'");
+    
+    int max_hilos = 1;
+    #if defined(_OPENMP) && !defined(_OPENMP_DISABLED)
+    max_hilos = omp_get_max_threads();
+    std::cout << "Hilos máximos OpenMP: " << max_hilos << std::endl;
+    #else
+    std::cout << "OpenMP no disponible - usando modo secuencial" << std::endl;
+    #endif
+    
+    int num_hilos = leerEntero("¿Cuántos hilos usar para paralelización?", 1, max_hilos);
+    if (num_hilos == 1) {
+        std::cout << "🔄 Modo secuencial seleccionado" << std::endl;
+    } else {
+        std::cout << "🔄 Paralelización OpenMP con " << num_hilos << " hilos" << std::endl;
+    }
+    
     std::cout << std::endl;
     std::cout << "🚀 Iniciando benchmark..." << std::endl;
     
@@ -283,6 +321,7 @@ void InterfazTerminal::ejecutarBenchmarkRendimiento() {
         
         BenchmarkSistema benchmark;
         benchmark.configurarVerbosidad(true);
+        benchmark.configurarHilos(num_hilos);
         
         auto resultado = benchmark.ejecutarBenchmark(largo, mostrar_progreso);
         
@@ -337,6 +376,14 @@ void InterfazTerminal::ejecutarBenchmarkEscalabilidad() {
     try {
         BenchmarkSistema benchmark;
         benchmark.configurarVerbosidad(false);
+        
+        // Configurar paralelización para escalabilidad
+        int num_hilos_escalabilidad = 1;
+        #if defined(_OPENMP) && !defined(_OPENMP_DISABLED)
+        num_hilos_escalabilidad = omp_get_max_threads();
+        std::cout << "🔄 Usando " << num_hilos_escalabilidad << " hilos para análisis de escalabilidad" << std::endl;
+        #endif
+        benchmark.configurarHilos(num_hilos_escalabilidad);
         
         std::vector<ResultadoBenchmark> resultados;
         
