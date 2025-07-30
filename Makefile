@@ -120,10 +120,31 @@ test-benchmark: $(TARGET_BENCHMARK)
 	@echo "Ejecutando benchmark de prueba (12 bits, 2 procesos)..."
 	mpirun -np 2 ./$(TARGET_BENCHMARK) -b 12 -v
 
-# Benchmark intensivo
+# Benchmark intensivo configurable
+# Variables por defecto (pueden ser sobrescritas)
+INTENSIVE_BITS ?= 20
+INTENSIVE_PROCS ?= 8
+INTENSIVE_CORES ?= 8
+INTENSIVE_OPTS ?= -v
+
 intensive-benchmark: $(TARGET_BENCHMARK)
-	@echo "Ejecutando benchmark intensivo (20 bits, 8 procesos)..."
-	mpirun -np 8 ./$(TARGET_BENCHMARK) -b 20 -c 8 -v
+	@echo "Ejecutando benchmark intensivo configurable..."
+	@echo "  Bits: $(INTENSIVE_BITS)"
+	@echo "  Procesos MPI: $(INTENSIVE_PROCS)"
+	@echo "  Núcleos CPU: $(INTENSIVE_CORES)"
+	@echo "  Opciones: $(INTENSIVE_OPTS)"
+	@echo "===========================================" 
+	mpirun -np $(INTENSIVE_PROCS) ./$(TARGET_BENCHMARK) -b $(INTENSIVE_BITS) -c $(INTENSIVE_CORES) $(INTENSIVE_OPTS)
+
+# Super benchmark para sistemas de alto rendimiento
+super-intensive-benchmark: $(TARGET_BENCHMARK)
+	@echo "Ejecutando SUPER benchmark intensivo (25 bits, 16 procesos)..."
+	mpirun -np 16 ./$(TARGET_BENCHMARK) -b 25 -c 16 -v
+
+# Benchmark extremo para clusters
+extreme-benchmark: $(TARGET_BENCHMARK)
+	@echo "Ejecutando benchmark EXTREMO (28 bits, 32 procesos)..."
+	mpirun -np 32 ./$(TARGET_BENCHMARK) -b 28 -c 32 -v
 
 # Crear archivo de ejemplo
 ejemplo: $(DATADIR)/parametros.in
@@ -172,7 +193,9 @@ help:
 	@echo "  make benchmark - Compilar sistema de benchmark de rendimiento"
 	@echo "  make run-benchmark - Ejecutar benchmark interactivo"
 	@echo "  make test-benchmark - Benchmark de prueba (12 bits, 2 procesos)"
-	@echo "  make intensive-benchmark - Benchmark intensivo (20 bits, 8 procesos)"
+	@echo "  make intensive-benchmark - Benchmark intensivo CONFIGURABLE"
+	@echo "  make super-intensive-benchmark - Super benchmark (25 bits, 16 procesos)"
+	@echo "  make extreme-benchmark - Benchmark extremo (28 bits, 32 procesos)"
 	@echo "  make ejemplo - Crear archivo de ejemplo"
 	@echo "  make clean   - Limpiar archivos generados"
 	@echo "  make clean-all - Limpiar todo incluyendo datos"
@@ -189,6 +212,19 @@ help:
 	@echo "  make ejemplo && make run"
 	@echo "  make mpi && make test-mpi"
 	@echo "  make mpi && mpirun -np 2 ./$(TARGET_MPI) -l 5 -o resultados.csv"
+	@echo ""
+	@echo "Configuración de benchmark intensivo:"
+	@echo "  make intensive-benchmark                              # Usar valores por defecto"
+	@echo "  make intensive-benchmark INTENSIVE_BITS=22           # Personalizar solo bits"
+	@echo "  make intensive-benchmark INTENSIVE_PROCS=16          # Personalizar solo procesos"
+	@echo "  make intensive-benchmark INTENSIVE_BITS=24 INTENSIVE_PROCS=32 INTENSIVE_CORES=32"
+	@echo "  make intensive-benchmark INTENSIVE_OPTS='-v -s'      # Modo verbose + guardar resultados"
+	@echo ""
+	@echo "Variables configurables:"
+	@echo "  INTENSIVE_BITS  = Número de bits (por defecto: 20)"
+	@echo "  INTENSIVE_PROCS = Procesos MPI (por defecto: 8)"  
+	@echo "  INTENSIVE_CORES = Núcleos CPU (por defecto: 8)"
+	@echo "  INTENSIVE_OPTS  = Opciones adicionales (por defecto: -v)"
 
 # Instalar dependencias (para futuro uso con MPI)
 install-deps:
@@ -196,4 +232,4 @@ install-deps:
 	@echo "⚠️  Para futuras versiones MPI se requerirá: libopenmpi-dev"
 
 # Reglas que no corresponden a archivos
-.PHONY: all debug run test mpi run-mpi test-mpi quick-mpi benchmark run-benchmark test-benchmark intensive-benchmark clean clean-all info help ejemplo install-deps 
+.PHONY: all debug run test mpi run-mpi test-mpi quick-mpi benchmark run-benchmark test-benchmark intensive-benchmark super-intensive-benchmark extreme-benchmark clean clean-all info help ejemplo install-deps 

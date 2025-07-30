@@ -259,14 +259,22 @@ int main(int argc, char* argv[]) {
             std::cout << "Consulte el archivo de métricas: resultados/" << config.archivoMetricas << std::endl;
         }
         
+        // CRÍTICO: Limpiar comunicaciones MPI pendientes antes de finalizar
+        benchmark.limpiarComunicacionesPendientes();
+        
     } catch (const std::exception& e) {
         if (rank == 0) {
             std::cerr << "❌ Error durante el benchmark: " << e.what() << std::endl;
         }
+        // Sincronizar antes de finalizar, incluso en caso de error
+        MPI_Barrier(MPI_COMM_WORLD);
         MPI_Finalize();
         return 1;
     }
     
+    // CRÍTICO: Sincronizar todos los procesos antes de MPI_Finalize()
+    // Esto previene errores de finalización prematura
+    MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
     return 0;
 } 

@@ -644,8 +644,8 @@ void AnalisisExhaustivoMPI::ejecutarBenchmark(const ConfiguracionBenchmark& conf
         // Las estadísticas de caché se actualizan automáticamente en procesarCombinacionRapido()
         // usando las métricas reales del CalculadorCostos con resolverConPatrones()
         
-        // Sincronizar caché distribuido solo ocasionalmente (para evitar saturación)
-        if (config.bits >= 18 && i > 0 && i % 1000 == 0) {
+        // Sincronizar caché distribuido solo para casos muy grandes (>25 bits)
+        if (config.bits >= 25 && i > 0 && i % 2000 == 0) {
             sincronizarCacheDistribuido();
         }
         
@@ -743,12 +743,13 @@ bool AnalisisExhaustivoMPI::procesarCombinacionRapido(const std::vector<int>& co
     metricasLocales_.cacheHits += (cacheHitsDespues - cacheHitsAntes);
     metricasLocales_.cacheMisses += (cacheMissesDespues - cacheMissesAntes);
     
-    // CACHÉ DISTRIBUIDO OPCIONAL Y CONTROLADO (solo para casos grandes)
-    if (solucion.solucionValida && config_.bits >= 16) {
+    // CACHÉ DISTRIBUIDO DESHABILITADO para evitar problemas MPI en casos pequeños
+    // Solo se habilita para casos muy grandes donde el beneficio supera los problemas MPI
+    if (solucion.solucionValida && config_.bits >= 25) {
         // Solo compartir sufijos ocasionalmente para evitar saturación MPI
         static int contadorCompartir = 0;
         contadorCompartir++;
-        if (contadorCompartir % 100 == 0) { // Solo cada 100 soluciones válidas
+        if (contadorCompartir % 500 == 0) { // Solo cada 500 soluciones válidas
             compartirSufijosEncontrados(combinacion, solucion.estados);
         }
     }
@@ -813,6 +814,13 @@ void AnalisisExhaustivoMPI::recolectarMetricas() {
         MPI_Send(&metricasLocales_.cacheHits, 1, MPI_INT, 0, TAG_METRICS, MPI_COMM_WORLD);
         MPI_Send(&metricasLocales_.cacheMisses, 1, MPI_INT, 0, TAG_METRICS, MPI_COMM_WORLD);
     }
+    
+    // CRÍTICO: Limpiar comunicaciones pendientes antes de sincronizar
+    limpiarComunicacionesPendientes();
+    
+    // CRÍTICO: Sincronizar todos los procesos antes de continuar
+    // Esto asegura que todas las operaciones MPI estén completadas
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void AnalisisExhaustivoMPI::calcularMetricasGlobales() {
@@ -1334,5 +1342,53 @@ void AnalisisExhaustivoMPI::recibirPatronesDeOtrosProcesos() {
                 }
             }
         }
+    }
+}
+
+void AnalisisExhaustivoMPI::limpiarComunicacionesPendientes() {
+    // Solo limpiar mensajes para casos grandes donde se usa caché distribuido
+    if (config_.bits < 25) {
+        return; // No hay mensajes de caché distribuido para casos pequeños
+    }
+    
+    // Limpiar mensajes MPI pendientes de forma conservadora
+    int flag;
+    MPI_Status status;
+    int messagesPendingCount = 0;
+    const int MAX_CLEANUP_MESSAGES = 100; // Límite conservador
+    
+    // Solo limpiar mensajes específicos de caché distribuido
+    for (int fuente = 0; fuente < size_ && messagesPendingCount < MAX_CLEANUP_MESSAGES; ++fuente) {
+        if (fuente != rank_) {
+            // Verificar y limpiar solo mensajes TAG_CACHE_COUNT
+            MPI_Iprobe(fuente, TAG_CACHE_COUNT, MPI_COMM_WORLD, &flag, &status);
+            if (flag) {
+                int tamanoPatron;
+                MPI_Recv(&tamanoPatron, 1, MPI_INT, fuente, TAG_CACHE_COUNT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                messagesPendingCount++;
+                
+                // Si hay tamaño válido, recibir los datos asociados
+                if (tamanoPatron > 0 && tamanoPatron <= 50) {
+                    std::vector<int> patron(tamanoPatron);
+                    std::vector<int> solucionInt(tamanoPatron);
+                    
+                    MPI_Iprobe(fuente, TAG_CACHE_PATTERN, MPI_COMM_WORLD, &flag, &status);
+                    if (flag) {
+                        MPI_Recv(patron.data(), tamanoPatron, MPI_INT, fuente, TAG_CACHE_PATTERN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        messagesPendingCount++;
+                    }
+                    
+                    MPI_Iprobe(fuente, TAG_CACHE_SOLUTION, MPI_COMM_WORLD, &flag, &status);
+                    if (flag) {
+                        MPI_Recv(solucionInt.data(), tamanoPatron, MPI_INT, fuente, TAG_CACHE_SOLUTION, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        messagesPendingCount++;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (messagesPendingCount > 0 && rank_ == 0) {
+        std::cout << "🧹 Limpiados " << messagesPendingCount << " mensajes MPI pendientes" << std::endl;
     }
 } 

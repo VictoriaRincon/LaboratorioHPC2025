@@ -121,6 +121,7 @@ public:
     bool buscarSufijoEnCacheDistribuido(const std::vector<int>& sufijo, std::vector<Estado>& solucionEncontrada);
     void enviarPatronAOtrosProcesos(const std::vector<int>& patron, const std::vector<Estado>& solucion);
     void recibirPatronesDeOtrosProcesos();
+    void limpiarComunicacionesPendientes();
     
     // Utilidades originales (mantener compatibilidad)
     std::string formatearEstadoEncendido(Estado estadoAnterior, Estado estadoActual, int posicion);
