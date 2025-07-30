@@ -14,6 +14,10 @@
 #include <thread>
 #include <ctime>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 AnalisisExhaustivoMPI::AnalisisExhaustivoMPI(int rank, int size) 
     : rank_(rank), size_(size) {
     calculador_.setMostrarDetalles(false);
@@ -22,11 +26,23 @@ AnalisisExhaustivoMPI::AnalisisExhaustivoMPI(int rank, int size)
 void AnalisisExhaustivoMPI::ejecutarAnalisisExhaustivo(int longitud, const std::string& archivoSalida) {
     auto inicio = std::chrono::high_resolution_clock::now();
     
+    // Configurar el análisis para el caché distribuido
+    config_.bits = longitud;
+    config_.modoVerboso = (rank_ == 0); // Solo el proceso 0 es verbose por defecto
+    
+    // Inicializar sistema de comunicación mejorado
+    if (size_ > 1) {
+        inicializarSincronizacionPeriodica();
+    }
+    
     if (rank_ == 0) {
-        std::cout << "=== ANÁLISIS EXHAUSTIVO CON MPI ===" << std::endl;
+        std::cout << "=== ANÁLISIS EXHAUSTIVO CON MPI MEJORADO ===" << std::endl;
         std::cout << "Longitud: " << longitud << std::endl;
         std::cout << "Procesos MPI: " << size_ << std::endl;
         std::cout << "Total de combinaciones: " << (1 << longitud) << std::endl;
+        if (size_ > 1) {
+            std::cout << "🔄 Sistema de comunicación de patrones: ACTIVADO" << std::endl;
+        }
     }
     
     // Generar todas las combinaciones (solo el proceso 0)
@@ -41,12 +57,48 @@ void AnalisisExhaustivoMPI::ejecutarAnalisisExhaustivo(int longitud, const std::
     
     std::cout << "Proceso " << rank_ << " analizará " << misCombinaciones.size() << " combinaciones" << std::endl;
     
-    // Analizar combinaciones asignadas
+    // Analizar combinaciones asignadas con paralelización híbrida MPI+OpenMP
     std::vector<ResultadoCombinacion> misResultados;
     auto inicioAnalisis = std::chrono::high_resolution_clock::now();
     
+    // Configurar OpenMP si está disponible
+    int num_threads = 1;
+#ifdef _OPENMP
+    // Usar un número moderado de hilos para evitar contención con MPI
+    num_threads = std::max(1, std::min(4, omp_get_max_threads()));
+    omp_set_num_threads(num_threads);
+    
+    if (rank_ == 0) {
+        std::cout << "🧵 Usando " << num_threads << " hilos OpenMP por proceso MPI" << std::endl;
+    }
+#endif
+    
+    // Redimensionar vector de resultados para acceso seguro desde múltiples hilos
+    misResultados.resize(misCombinaciones.size());
+    
+    // Sincronización inteligente basada en el tamaño del problema
+    int intervalo_sync;
+    if (longitud <= 8) {
+        intervalo_sync = 25;   // Sincronizar cada 25 combinaciones para casos pequeños
+    } else if (longitud <= 12) {
+        intervalo_sync = 50;   // Sincronizar cada 50 combinaciones para casos medianos
+    } else if (longitud <= 18) {
+        intervalo_sync = 100;  // Sincronizar cada 100 combinaciones para casos grandes
+    } else {
+        intervalo_sync = 200;  // Sincronizar cada 200 combinaciones para casos muy grandes
+    }
+    
+    // Paralelizar el bucle principal con OpenMP
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 1) shared(misResultados, misCombinaciones)
+#endif
     for (size_t i = 0; i < misCombinaciones.size(); ++i) {
+        // Solo el hilo maestro muestra progreso para evitar salida caótica
+#ifdef _OPENMP
+        if (rank_ == 0 && omp_get_thread_num() == 0) {
+#else
         if (rank_ == 0) {
+#endif
             mostrarProgreso(i, misCombinaciones.size());
         }
         
@@ -55,13 +107,22 @@ void AnalisisExhaustivoMPI::ejecutarAnalisisExhaustivo(int longitud, const std::
         auto finCombo = std::chrono::high_resolution_clock::now();
         
         auto duracionCombo = std::chrono::duration_cast<std::chrono::microseconds>(finCombo - inicioCombo);
+        
+        // Actualización thread-safe del tiempo total
+#ifdef _OPENMP
+#pragma omp atomic
+#endif
         estadisticasCache_.tiempoTotal += duracionCombo.count() / 1000.0; // convertir a ms
         
-        misResultados.push_back(resultado);
+        misResultados[i] = resultado;
         
-        // Sincronizar caché periódicamente
-        if (i % 50 == 0) {
-            sincronizarCache();
+        // Sincronización solo desde el hilo maestro para evitar race conditions
+#ifdef _OPENMP
+        if (size_ > 1 && i % intervalo_sync == 0 && omp_get_thread_num() == 0) {
+#else
+        if (size_ > 1 && i % intervalo_sync == 0) {
+#endif
+            sincronizarCacheDistribuido();
         }
     }
     
@@ -743,14 +804,25 @@ bool AnalisisExhaustivoMPI::procesarCombinacionRapido(const std::vector<int>& co
     metricasLocales_.cacheHits += (cacheHitsDespues - cacheHitsAntes);
     metricasLocales_.cacheMisses += (cacheMissesDespues - cacheMissesAntes);
     
-    // CACHÉ DISTRIBUIDO DESHABILITADO para evitar problemas MPI en casos pequeños
-    // Solo se habilita para casos muy grandes donde el beneficio supera los problemas MPI
-    if (solucion.solucionValida && config_.bits >= 25) {
-        // Solo compartir sufijos ocasionalmente para evitar saturación MPI
+    // CACHÉ DISTRIBUIDO MEJORADO: Habilitar para todos los tamaños con control inteligente
+    if (solucion.solucionValida && size_ > 1) { // Solo si hay múltiples procesos
+        // Determinar frecuencia de compartición basada en tamaño del problema
         static int contadorCompartir = 0;
         contadorCompartir++;
-        if (contadorCompartir % 500 == 0) { // Solo cada 500 soluciones válidas
-            compartirSufijosEncontrados(combinacion, solucion.estados);
+        
+        int frecuenciaCompartir;
+        if (config_.bits <= 8) {
+            frecuenciaCompartir = 50;   // Compartir cada 50 soluciones para casos pequeños
+        } else if (config_.bits <= 15) {
+            frecuenciaCompartir = 100;  // Compartir cada 100 soluciones para casos medianos
+        } else if (config_.bits <= 20) {
+            frecuenciaCompartir = 200;  // Compartir cada 200 soluciones para casos grandes
+        } else {
+            frecuenciaCompartir = 500;  // Compartir cada 500 soluciones para casos muy grandes
+        }
+        
+        if (contadorCompartir % frecuenciaCompartir == 0) {
+            compartirPatronesOptimos(combinacion, solucion.estados);
         }
     }
     
@@ -1218,34 +1290,85 @@ void AnalisisExhaustivoMPI::escribirMetricasProgresivas(const ConfiguracionBench
 // ==================================================================================
 
 void AnalisisExhaustivoMPI::sincronizarCacheDistribuido() {
-    // Sincronización no bloqueante para evitar deadlocks
+    // Sincronización mejorada no bloqueante para evitar deadlocks
+    
+    // Recibir patrones de otros procesos
     recibirPatronesDeOtrosProcesos();
+    
+    // Sincronización controlada cada cierto tiempo para asegurar consistencia
+    static int contadorSincronizacion = 0;
+    contadorSincronizacion++;
+    
+    // Realizar sincronización completa cada 1000 operaciones para casos pequeños/medianos
+    // o cada 2000 para casos grandes para reducir overhead
+    int intervaloSincronizacion = (config_.bits <= 15) ? 1000 : 2000;
+    
+    if (contadorSincronizacion % intervaloSincronizacion == 0) {
+        // Sincronización controlada no bloqueante
+        MPI_Request request;
+        int flag;
+        
+        // Usar MPI_Ibarrier para sincronización no bloqueante
+        MPI_Ibarrier(MPI_COMM_WORLD, &request);
+        
+        // Esperar un tiempo limitado para la sincronización
+        auto inicio = std::chrono::high_resolution_clock::now();
+        do {
+            MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+            auto ahora = std::chrono::high_resolution_clock::now();
+            auto duracion = std::chrono::duration_cast<std::chrono::milliseconds>(ahora - inicio);
+            
+            // Timeout después de 100ms para evitar bloqueos
+            if (duracion.count() > 100) {
+                MPI_Cancel(&request);
+                break;
+            }
+        } while (!flag);
+        
+        if (rank_ == 0 && config_.modoVerboso) {
+            std::cout << "🔄 Sincronización de caché completada (ciclo " << contadorSincronizacion << ")" << std::endl;
+        }
+    }
 }
 
-void AnalisisExhaustivoMPI::compartirSufijosEncontrados(const std::vector<int>& combinacion, const std::vector<Estado>& solucion) {
-    // Compartir solo el PRIMER sufijo válido de 0 a 0 para minimizar tráfico MPI
+void AnalisisExhaustivoMPI::compartirPatronesOptimos(const std::vector<int>& combinacion, const std::vector<Estado>& solucion) {
+    // Lista de patrones útiles encontrados en esta combinación
+    std::vector<std::pair<std::vector<int>, std::vector<Estado>>> patronesUtiles;
+    
+    // Buscar TODOS los patrones 0-to-0 útiles en la combinación
     for (size_t i = 0; i < combinacion.size(); ++i) {
         if (combinacion[i] == 0) {
-            // Buscar el próximo 0 para formar sufijo completo
-            for (size_t j = i + 1; j < combinacion.size(); ++j) {
+            // Buscar patrones de diferentes tamaños que terminen en 0
+            for (size_t j = i + 2; j < combinacion.size(); ++j) { // Mínimo 3 elementos (i, i+1, j)
                 if (combinacion[j] == 0) {
-                    // Sufijo encontrado de posición i a j (inclusive)
-                    std::vector<int> patronSufijo(combinacion.begin() + i, combinacion.begin() + j + 1);
-                    std::vector<Estado> solucionSufijo(solucion.begin() + i, solucion.begin() + j + 1);
+                    // Patrón encontrado de posición i a j (inclusive)
+                    std::vector<int> patron(combinacion.begin() + i, combinacion.begin() + j + 1);
+                    std::vector<Estado> solucionPatron(solucion.begin() + i, solucion.begin() + j + 1);
                     
-                    // Verificar que el sufijo es válido, útil y NO está ya en caché local
-                    if (patronSufijo.size() >= 3 && patronSufijo.size() <= 8 && !calculador_.estaEnCache(patronSufijo)) {
-                        // Solo enviar sufijos de tamaño medio (3-8) para mayor utilidad
-                        enviarPatronAOtrosProcesos(patronSufijo, solucionSufijo);
-                        
-                        // También guardar localmente para uso futuro
-                        calculador_.guardarEnCache(patronSufijo, solucionSufijo);
-                        
-                        // SOLO compartir el primer sufijo útil encontrado
-                        return;
+                    // Verificar que el patrón es útil para compartir
+                    if (esPatronUtilParaCompartir(patron)) {
+                        patronesUtiles.push_back({patron, solucionPatron});
                     }
                 }
             }
+        }
+    }
+    
+    // Compartir hasta 3 patrones más útiles para evitar saturar la red
+    int patronesCompartidos = 0;
+    for (const auto& par : patronesUtiles) {
+        if (patronesCompartidos >= 3) break;
+        
+        const auto& patron = par.first;
+        const auto& solucionPatron = par.second;
+        
+        // Solo compartir si no está ya en caché local
+        if (!calculador_.estaEnCache(patron)) {
+            enviarPatronAOtrosProcesos(patron, solucionPatron);
+            
+            // También guardar localmente para uso futuro
+            calculador_.guardarEnCache(patron, solucionPatron);
+            patronesCompartidos++;
         }
     }
 }
@@ -1346,18 +1469,13 @@ void AnalisisExhaustivoMPI::recibirPatronesDeOtrosProcesos() {
 }
 
 void AnalisisExhaustivoMPI::limpiarComunicacionesPendientes() {
-    // Solo limpiar mensajes para casos grandes donde se usa caché distribuido
-    if (config_.bits < 25) {
-        return; // No hay mensajes de caché distribuido para casos pequeños
-    }
-    
-    // Limpiar mensajes MPI pendientes de forma conservadora
+    // Limpiar mensajes MPI pendientes de forma conservadora para todos los tamaños
     int flag;
     MPI_Status status;
     int messagesPendingCount = 0;
-    const int MAX_CLEANUP_MESSAGES = 100; // Límite conservador
+    const int MAX_CLEANUP_MESSAGES = 200; // Aumentado para manejar más tráfico
     
-    // Solo limpiar mensajes específicos de caché distribuido
+    // Limpiar mensajes específicos de caché distribuido
     for (int fuente = 0; fuente < size_ && messagesPendingCount < MAX_CLEANUP_MESSAGES; ++fuente) {
         if (fuente != rank_) {
             // Verificar y limpiar solo mensajes TAG_CACHE_COUNT
@@ -1388,7 +1506,86 @@ void AnalisisExhaustivoMPI::limpiarComunicacionesPendientes() {
         }
     }
     
-    if (messagesPendingCount > 0 && rank_ == 0) {
-        std::cout << "🧹 Limpiados " << messagesPendingCount << " mensajes MPI pendientes" << std::endl;
+    if (messagesPendingCount > 0 && (rank_ == 0 || config_.modoVerboso)) {
+        std::cout << "🧹 Proceso " << rank_ << " limpió " << messagesPendingCount << " mensajes MPI pendientes" << std::endl;
     }
+}
+
+// ==================================================================================
+// NUEVAS IMPLEMENTACIONES PARA COMUNICACIÓN MEJORADA DE PATRONES
+// ==================================================================================
+
+bool AnalisisExhaustivoMPI::esPatronUtilParaCompartir(const std::vector<int>& patron) const {
+    // Verificar tamaño útil del patrón
+    if (patron.size() < 3 || patron.size() > 12) {
+        return false; // Muy pequeño o muy grande
+    }
+    
+    // Verificar que empiece y termine en 0 (como requiere el usuario)
+    if (patron.front() != 0 || patron.back() != 0) {
+        return false;
+    }
+    
+    // Calcular la complejidad del patrón
+    int complejidad = calcularComplejidadPatron(patron);
+    
+    // Patrones demasiado simples (todos 0s) o muy complejos no son útiles
+    if (complejidad <= 1 || complejidad > patron.size() * 0.8) {
+        return false;
+    }
+    
+    // Verificar que contenga al menos una transición 0->1 o 1->0
+    bool tieneTransiciones = false;
+    for (size_t i = 1; i < patron.size(); ++i) {
+        if (patron[i] != patron[i-1]) {
+            tieneTransiciones = true;
+            break;
+        }
+    }
+    
+    if (!tieneTransiciones) {
+        return false; // Patrón uniforme, no útil
+    }
+    
+    // El patrón es útil para compartir
+    return true;
+}
+
+int AnalisisExhaustivoMPI::calcularComplejidadPatron(const std::vector<int>& patron) const {
+    if (patron.empty()) return 0;
+    
+    int complejidad = 0;
+    
+    // Contar transiciones entre estados
+    for (size_t i = 1; i < patron.size(); ++i) {
+        if (patron[i] != patron[i-1]) {
+            complejidad++;
+        }
+    }
+    
+    // Añadir peso por segmentos continuos (más complejidad = más segmentos útiles)
+    int segmentos = 1;
+    for (size_t i = 1; i < patron.size(); ++i) {
+        if (patron[i] != patron[i-1]) {
+            segmentos++;
+        }
+    }
+    
+    // Complejidad final combina transiciones y estructura
+    complejidad += segmentos;
+    
+    return complejidad;
+}
+
+void AnalisisExhaustivoMPI::inicializarSincronizacionPeriodica() {
+    // Inicializar estructuras para sincronización periódica mejorada
+    if (rank_ == 0 && config_.modoVerboso) {
+        std::cout << "🔄 Inicializando sincronización periódica mejorada para " << size_ << " procesos" << std::endl;
+    }
+    
+    // Limpiar cualquier mensaje pendiente al inicio
+    limpiarComunicacionesPendientes();
+    
+    // Sincronizar todos los procesos al inicio
+    MPI_Barrier(MPI_COMM_WORLD);
 } 

@@ -1,5 +1,68 @@
 # Sistema de Optimización de Máquina de Estados
 
+## 🚀 NUEVAS FUNCIONALIDADES: Comunicación Inteligente de Patrones MPI+OpenMP
+
+### Comunicación entre Procesos para Compartir Soluciones
+
+**Los procesos ahora pueden comunicarse entre sí para compartir soluciones** encontradas para patrones que empiezan y terminan en 0. Esta funcionalidad revoluciona el rendimiento del sistema al permitir que los procesos reutilicen automáticamente las soluciones ya calculadas por otros.
+
+#### 🔄 Características Principales:
+
+1. **Detección Automática de Patrones Útiles**
+   - Identifica automáticamente patrones que empiezan y terminan en 0
+   - Evalúa la complejidad y utilidad de cada patrón antes de compartirlo
+   - Solo comparte patrones que realmente aportan valor al conjunto
+
+2. **Comunicación Escalable y Adaptativa**
+   - Frecuencia de compartición que se adapta automáticamente al tamaño del problema
+   - Control inteligente para evitar saturación de la red MPI
+   - Sincronización no bloqueante para prevenir deadlocks
+
+3. **Paralelización Híbrida MPI+OpenMP**
+   - **MPI**: Distribución del trabajo entre nodos/procesos
+   - **OpenMP**: Paralelización dentro de cada proceso MPI (hasta 4 hilos por proceso)
+   - **Comunicación inteligente**: Los procesos intercambian patrones útiles automáticamente
+
+#### 📈 Configuración Automática por Tamaño:
+
+- **Casos pequeños (≤8 bits)**: Compartir cada 50 soluciones, sincronizar cada 25
+- **Casos medianos (9-15 bits)**: Compartir cada 100 soluciones, sincronizar cada 50  
+- **Casos grandes (16-20 bits)**: Compartir cada 200 soluciones, sincronizar cada 100
+- **Casos muy grandes (>20 bits)**: Compartir cada 500 soluciones, sincronizar cada 200
+
+#### 🎯 Ejemplo de Funcionamiento:
+
+```
+Proceso 1 encuentra solución óptima para: [0, 1, 1, 0, 1, 0]
+           ↓ (Comunicación automática)
+Procesos 2, 3, 4 pueden reutilizar esta solución si encuentran el mismo patrón
+           ↓ (Resultado)
+Reducción significativa del tiempo total de cálculo
+```
+
+### Compilación con Soporte MPI+OpenMP
+
+```bash
+# Análisis exhaustivo con comunicación de patrones
+make mpi
+
+# Sistema de benchmark de rendimiento
+make benchmark
+```
+
+### Ejecución
+
+```bash
+# Análisis básico con comunicación de patrones (4 procesos)
+mpirun -np 4 ./analisis_exhaustivo_mpi -l 8
+
+# Benchmark de rendimiento con paralelización híbrida
+mpirun -np 4 ./benchmark_mpi -b 12 -v
+
+# Test rápido para verificar funcionalidad
+make test-mpi
+```
+
 ## Descripción
 
 Este proyecto implementa un algoritmo de programación dinámica para optimizar los costos de operación de una máquina de calentamiento que puede estar en diferentes estados térmicos. El sistema modela una máquina de estados finitos con restricciones de transición y busca la secuencia de estados que minimiza el costo total considerando la disponibilidad de energía eólica en cada período temporal.

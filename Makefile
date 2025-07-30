@@ -7,6 +7,10 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -O2
 MPI_CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -DMPI_BUILD
 DEBUG_FLAGS = -g -DDEBUG
 
+# Flags OpenMP (detectar automáticamente si está disponible)
+OPENMP_FLAGS = -fopenmp
+MPI_OPENMP_CXXFLAGS = $(MPI_CXXFLAGS) $(OPENMP_FLAGS)
+
 # Directorios
 SRCDIR = src
 INCDIR = include
@@ -46,18 +50,18 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 MPI_SOURCES = $(SRCDIR)/calculador_costos.cpp $(SRCDIR)/escenario.cpp $(SRCDIR)/analisis_exhaustivo_mpi.cpp $(SRCDIR)/main_exhaustivo_mpi.cpp
 MPI_OBJECTS = $(MPI_SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%_mpi.o)
 
-# Compilar versión MPI
+# Compilar versión MPI con OpenMP
 mpi: $(TARGET_MPI)
 
 $(TARGET_MPI): $(MPI_OBJECTS)
-	@echo "Enlazando $(TARGET_MPI)..."
-	$(MPICXX) $(MPI_OBJECTS) -o $(TARGET_MPI)
-	@echo "✅ Compilación MPI exitosa!"
+	@echo "Enlazando $(TARGET_MPI) con soporte MPI+OpenMP..."
+	$(MPICXX) $(OPENMP_FLAGS) $(MPI_OBJECTS) -o $(TARGET_MPI)
+	@echo "✅ Compilación MPI+OpenMP exitosa!"
 
-# Compilación de archivos objeto para MPI
+# Compilación de archivos objeto para MPI con OpenMP
 $(OBJDIR)/%_mpi.o: $(SRCDIR)/%.cpp
-	@echo "Compilando $< para MPI..."
-	$(MPICXX) $(MPI_CXXFLAGS) -I$(INCDIR) -c $< -o $@
+	@echo "Compilando $< para MPI+OpenMP..."
+	$(MPICXX) $(MPI_OPENMP_CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 # === REGLAS PARA BENCHMARK DE RENDIMIENTO ===
 
@@ -65,18 +69,18 @@ $(OBJDIR)/%_mpi.o: $(SRCDIR)/%.cpp
 BENCHMARK_SOURCES = $(SRCDIR)/calculador_costos.cpp $(SRCDIR)/escenario.cpp $(SRCDIR)/analisis_exhaustivo_mpi.cpp $(SRCDIR)/main_benchmark_mpi.cpp
 BENCHMARK_OBJECTS = $(BENCHMARK_SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%_benchmark.o)
 
-# Compilar versión Benchmark
+# Compilar versión Benchmark con OpenMP
 benchmark: $(TARGET_BENCHMARK)
 
 $(TARGET_BENCHMARK): $(BENCHMARK_OBJECTS)
-	@echo "Enlazando $(TARGET_BENCHMARK)..."
-	$(MPICXX) $(BENCHMARK_OBJECTS) -o $(TARGET_BENCHMARK)
-	@echo "✅ Compilación Benchmark exitosa!"
+	@echo "Enlazando $(TARGET_BENCHMARK) con soporte MPI+OpenMP..."
+	$(MPICXX) $(OPENMP_FLAGS) $(BENCHMARK_OBJECTS) -o $(TARGET_BENCHMARK)
+	@echo "✅ Compilación Benchmark MPI+OpenMP exitosa!"
 
-# Compilación de archivos objeto para Benchmark
+# Compilación de archivos objeto para Benchmark con OpenMP
 $(OBJDIR)/%_benchmark.o: $(SRCDIR)/%.cpp
-	@echo "Compilando $< para Benchmark..."
-	$(MPICXX) $(MPI_CXXFLAGS) -I$(INCDIR) -c $< -o $@
+	@echo "Compilando $< para Benchmark MPI+OpenMP..."
+	$(MPICXX) $(MPI_OPENMP_CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 # Versión debug
 debug: CXXFLAGS += $(DEBUG_FLAGS)
@@ -180,17 +184,18 @@ info:
 # Mostrar ayuda
 help:
 	@echo "=== SISTEMA DE OPTIMIZACIÓN DE MÁQUINA DE ESTADOS ==="
+	@echo "🔄 Ahora con soporte MPI+OpenMP para máximo rendimiento!"
 	@echo ""
 	@echo "Comandos disponibles:"
 	@echo "  make         - Compilar el proyecto original"
 	@echo "  make debug   - Compilar versión debug"
 	@echo "  make run     - Compilar y ejecutar versión original"
 	@echo "  make test    - Ejecutar tests automáticos"
-	@echo "  make mpi     - Compilar análisis exhaustivo con MPI"
+	@echo "  make mpi     - Compilar análisis exhaustivo con MPI+OpenMP 🚀"
 	@echo "  make run-mpi - Ejecutar análisis exhaustivo MPI (modo interactivo)"
 	@echo "  make test-mpi- Test MPI con longitud 5 (2 procesos)"
 	@echo "  make quick-mpi- Test rápido con longitud 4 (2 procesos)"
-	@echo "  make benchmark - Compilar sistema de benchmark de rendimiento"
+	@echo "  make benchmark - Compilar sistema de benchmark con MPI+OpenMP 🚀"
 	@echo "  make run-benchmark - Ejecutar benchmark interactivo"
 	@echo "  make test-benchmark - Benchmark de prueba (12 bits, 2 procesos)"
 	@echo "  make intensive-benchmark - Benchmark intensivo CONFIGURABLE"
@@ -201,6 +206,12 @@ help:
 	@echo "  make clean-all - Limpiar todo incluyendo datos"
 	@echo "  make info    - Mostrar información del proyecto"
 	@echo "  make help    - Mostrar esta ayuda"
+	@echo ""
+	@echo "🧵 PARALELIZACIÓN HÍBRIDA MPI+OpenMP:"
+	@echo "  • MPI: Distribución entre nodos/cores"
+	@echo "  • OpenMP: Paralelización dentro de cada proceso MPI"
+	@echo "  • Comunicación inteligente de patrones entre procesos"
+	@echo "  • Sincronización optimizada para evitar deadlocks"
 	@echo ""
 	@echo "Estructura del proyecto:"
 	@echo "  $(SRCDIR)/     - Archivos fuente (.cpp)"

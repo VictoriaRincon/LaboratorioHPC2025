@@ -115,13 +115,19 @@ public:
     void escribirMetricasProgresivas(const ConfiguracionBenchmark& config, const std::string& estado, double progreso);
     void mostrarResumenBenchmark();
     
-    // Caché distribuido MPI
+    // Caché distribuido MPI mejorado
     void sincronizarCacheDistribuido();
-    void compartirSufijosEncontrados(const std::vector<int>& combinacion, const std::vector<Estado>& solucion);
+    void compartirPatronesOptimos(const std::vector<int>& combinacion, const std::vector<Estado>& solucion);
+    void compartirSufijosEncontrados(const std::vector<int>& combinacion, const std::vector<Estado>& solucion); // Mantenido por compatibilidad
     bool buscarSufijoEnCacheDistribuido(const std::vector<int>& sufijo, std::vector<Estado>& solucionEncontrada);
     void enviarPatronAOtrosProcesos(const std::vector<int>& patron, const std::vector<Estado>& solucion);
     void recibirPatronesDeOtrosProcesos();
     void limpiarComunicacionesPendientes();
+    
+    // Utilidades para análisis de patrones
+    bool esPatronUtilParaCompartir(const std::vector<int>& patron) const;
+    int calcularComplejidadPatron(const std::vector<int>& patron) const;
+    void inicializarSincronizacionPeriodica();
     
     // Utilidades originales (mantener compatibilidad)
     std::string formatearEstadoEncendido(Estado estadoAnterior, Estado estadoActual, int posicion);
