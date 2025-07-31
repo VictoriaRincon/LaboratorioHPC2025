@@ -40,7 +40,7 @@ int obtener_minutos_apagada(const vector<bool> &encendida, int hora_actual) {
 // }
 
 vector<Demanda> obtener_demanda() {
-  std::string ruta = "data/parametros.in";
+  std::string ruta = "../data/parametros.in";
   std::ifstream archivo(ruta);
   std::vector<Demanda> datos;
   std::string linea;
@@ -82,23 +82,12 @@ vector<bool> *calcular_costo(const Escenario &esc) {
       continue;
     }
 
-    int minutos_apagada = obtener_minutos_apagada((*estado_maquina), h);
-    std::cout << "minutos_apagada: " << minutos_apagada << std::endl;
+    // int minutos_apagada = obtener_minutos_apagada((*estado_maquina), h);
+    // std::cout << "minutos_apagada: " << minutos_apagada << std::endl;
 
-    string tipo_arranque;
-    double potencia_subida; // MW/min según el tipo de arranque
-    if (minutos_apagada >= 240) {
-      tipo_arranque = "frio";
-      potencia_subida = 1.5;
-    } else if (minutos_apagada >= 120) {
-      tipo_arranque = "tibio";
-      potencia_subida = 2.6;
-    } else {
-      tipo_arranque = "caliente";
-      potencia_subida = 11.0;
-    }
+    double potencia_subida = 15; // MW/min según el tipo de arranque
 
-    // Tiempo en minutos para alcanzar la dßemanda (si parte de 0)
+    // Tiempo en minutos para alcanzar la demanda (si parte de 0)
     double tiempo_subida = demanda[h].valor / potencia_subida; // en minutos
     int horas_subida = static_cast<int>(ceil(tiempo_subida / 60.0));
 
@@ -126,7 +115,7 @@ vector<bool> *calcular_costo(const Escenario &esc) {
     // (Podrías comparar contra un costo alternativo o hacer optimización aquí)
     cout << "Hora " << h << "\n"
          << "Demanda = " << demanda[h].valor << " kWh\n"
-         << "Arranque = " << tipo_arranque << "\n"
+         //<< "Arranque = " << tipo_arranque << "\n"
          << "Costo operacion = " << costo_operacion << " USD\n"
          << "encender: " << (*encender)[h] << std::endl;
   }
