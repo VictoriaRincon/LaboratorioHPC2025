@@ -6,7 +6,7 @@ int main()
   auto inicio = std::chrono::high_resolution_clock::now();
 
   std::cout << "Ejecutando el Calculador de Costos..." << std::endl;
-  for (double eo = 0; eo < 1; eo++)
+  for (double eo = 0; eo < 1464; eo++) //1464
   {
     std::cout << "Energia eolica: " << eo << std::endl;
     calcular_costo(eo);
