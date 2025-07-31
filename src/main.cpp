@@ -1,13 +1,19 @@
 #include "../include/calculador_costos.hpp"
 #include <iostream>
 
-int main() {
+int main()
+{
+  auto inicio = std::chrono::high_resolution_clock::now();
+
   std::cout << "Ejecutando el Calculador de Costos..." << std::endl;
-  struct Escenario escenario = {
-    00, // hora
-    0.0 // energia_eolica
-  };
-  calcular_costo(escenario);
+  for (double eo = 0; eo < 1; eo++)
+  {
+    std::cout << "Energia eolica: " << eo << std::endl;
+    calcular_costo(eo);
+  }
+  auto fin = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> duracion = fin - inicio;
+  std::cout << "Tiempo transcurrido: " << duracion.count() << " segundos" << std::endl;
   return 0;
 }
 

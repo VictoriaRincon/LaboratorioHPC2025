@@ -3,6 +3,7 @@
 
 #include "escenario.hpp"
 
-double calcular_costo(const Escenario& esc);
+double calcular_costo(double esc);
+// double calcular_costo(const Escenario& esc);
 
 #endif
