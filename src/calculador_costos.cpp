@@ -58,9 +58,28 @@ vector<Demanda> obtener_demanda()
   return datos;
 }
 
+std::vector<Demanda> generar_demanda_aleatoria()
+{
+  std::vector<Demanda> datos;
+  std::srand(static_cast<unsigned int>(std::time(nullptr))); // Semilla aleatoria
+  for (int dias = 0; dias < 7; ++dias)
+  { // Generar datos para 7 días
+    for (int h = 0; h < 24; ++h)
+    {
+      Demanda d;
+      d.hora = h;
+      d.valor = static_cast<double>(std::rand() % 2201); // [0, 2200]
+      datos.push_back(d);
+    }
+  }
+
+  return datos;
+}
+
 vector<bool> *calcular_costo(double esc)
 {
-  vector<Demanda> demanda = obtener_demanda(); // Puedo leer un archivo o que sea un arreglo de 24
+  // vector<Demanda> demanda = obtener_demanda(); // Puedo leer un archivo o que sea un arreglo de 24
+  vector<Demanda> demanda = generar_demanda_aleatoria();
 
   int horas = demanda.size();
   std::vector<bool> *encender = new std::vector<bool>(horas, false);
