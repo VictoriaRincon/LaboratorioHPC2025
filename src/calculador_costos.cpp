@@ -1,4 +1,3 @@
-#include "../include/escenario.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -6,12 +5,6 @@
 #include <vector>
 
 using namespace std;
-
-enum EstadoMaquina
-{
-  APAGADA,
-  PRENDIDA
-};
 
 const double BASE_COSTO_ARRANQUE = 4208.0;
 const double MULT_COSTO_GN = 5.110;
@@ -62,8 +55,8 @@ std::vector<Demanda> generar_demanda_aleatoria()
 {
   std::vector<Demanda> datos;
   std::srand(static_cast<unsigned int>(std::time(nullptr))); // Semilla aleatoria
-  for (int dias = 0; dias < 7; ++dias)
-  { // Generar datos para 7 días
+  for (int dias = 0; dias < 1; ++dias)
+  {
     for (int h = 0; h < 24; ++h)
     {
       Demanda d;
@@ -78,14 +71,14 @@ std::vector<Demanda> generar_demanda_aleatoria()
 
 vector<bool> *calcular_costo(double esc)
 {
-  // vector<Demanda> demanda = obtener_demanda(); // Puedo leer un archivo o que sea un arreglo de 24
-  vector<Demanda> demanda = generar_demanda_aleatoria();
+  vector<Demanda> demanda = obtener_demanda(); // Puedo leer un archivo o que sea un arreglo de 24
+  // vector<Demanda> demanda = generar_demanda_aleatoria();
 
   int horas = demanda.size();
   std::vector<bool> *encender = new std::vector<bool>(horas, false);
 
   // Simulación hacia atrás
-  double demandaAComplacer = 0.0;
+  double demanda_sin_abastecer = 0.0;
   std::string tipo_maquina;
   int horas_apagada = 0;
   double costo_operacion = 0.0;
@@ -95,10 +88,10 @@ vector<bool> *calcular_costo(double esc)
     std::cout << "Hora:" + std::to_string(h) << std::endl;
     std::cout << "Demanda:" + std::to_string(demanda[h].valor) << std::endl;
 
-    demandaAComplacer = demanda[h].valor - esc;
-    std::cout << "Demanda a complacer:" + std::to_string(demandaAComplacer) << std::endl;
+    demanda_sin_abastecer = demanda[h].valor - esc;
+    std::cout << "Demanda a complacer:" + std::to_string(demanda_sin_abastecer) << std::endl;
 
-    if (demandaAComplacer <= 0.0)
+    if (demanda_sin_abastecer <= 0.0)
     {
       horas_apagada++;
       continue;
@@ -108,23 +101,23 @@ vector<bool> *calcular_costo(double esc)
     (*encender)[h] = true;
 
     // Asignar tipo_maquina según el valor de demanda
-    if (demandaAComplacer <= 171.0)
+    if (demanda_sin_abastecer <= 171.0)
     {
       tipo_maquina = "gas";
     }
-    else if (demandaAComplacer <= (171.0 * 2))
+    else if (demanda_sin_abastecer <= (171.0 * 2))
     {
       tipo_maquina = "ambas maquinas de gas";
     }
-    else if (demandaAComplacer <= POTENCIA_MAXIMA_MCC)
+    else if (demanda_sin_abastecer <= POTENCIA_MAXIMA_MCC)
     {
       tipo_maquina = "medio ciclo combinado";
     }
-    else if (demandaAComplacer <= POTENCIA_MAXIMA_CC)
+    else if (demanda_sin_abastecer <= POTENCIA_MAXIMA_CC)
     {
       tipo_maquina = "ciclo combinado completo";
     }
-    else if (demandaAComplacer > 905.0)
+    else if (demanda_sin_abastecer > 905.0)
     {
       tipo_maquina = "agua + ciclo combinado completo";
     }
@@ -167,22 +160,12 @@ vector<bool> *calcular_costo(double esc)
     }
 
     // Costo de operación por hora
-    double consumo_gn_m3 = demandaAComplacer * CONSUMO_GN_M3PKWH;
+    double consumo_gn_m3 = demanda_sin_abastecer * CONSUMO_GN_M3PKWH;
     costo_operacion += consumo_gn_m3 * COSTO_GN_USD_M3;
 
     // Tiempo en minutos para alcanzar la demanda (si parte de 0)
-    double tiempo_subida = demandaAComplacer / POTENCIA_SUBIDA; // en minutos
+    double tiempo_subida = demanda_sin_abastecer / POTENCIA_SUBIDA; // en minutos
     int horas_subida = static_cast<int>(ceil(tiempo_subida / 60.0));
-
-    // Marca las horas anteriores como encendidas si es necesario
-    for (int k = 0; k < horas_subida; ++k)
-    {
-      int hora_encender = h - k;
-      if (hora_encender >= 0)
-      {
-        (*encender)[hora_encender] = true;
-      }
-    }
 
     if ((h == 0 && (*encender)[h]) || (!(*encender)[h - 1]))
     {
@@ -193,7 +176,7 @@ vector<bool> *calcular_costo(double esc)
     (*encender)[h] = true;
 
     // (Podrías comparar contra un costo alternativo o hacer optimización aquí)
-    cout << "Demanda = " << demandaAComplacer << " kWh\n"
+    cout << "Demanda = " << demanda_sin_abastecer << " kWh\n"
          << "Arranque = " << tipo_arranque << "\n"
          << "Costo operacion = " << costo_operacion << " USD\n"
          << "encender: " << (*encender)[h] << "\n"
