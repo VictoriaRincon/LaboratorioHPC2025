@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 
     // std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
 
-    for (int eo = 0; eo <= 0; ++eo) // Maxima eolica 1464
+    for (int eolica = 1494; eolica <= 1494; ++eolica) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
@@ -94,7 +94,6 @@ int main(int argc, char **argv)
         for (int h = 0; h < demanda.size(); ++h)
         {
             double demanda_h = demanda[h];
-            double eolica = 0.0;
             if (rank == 0)
             {
                 std::cout << "\nHora " << h
@@ -132,7 +131,7 @@ int main(int argc, char **argv)
             }
             else
             {
-                respuesta = calcular_costo(eo, demanda_h, h, potencia_disponible, horas_apagada);
+                respuesta = calcular_costo(eolica, demanda_h, h, potencia_disponible, horas_apagada);
                 horas_apagada = 0; // Reseteamos horas apagada
             }
 
