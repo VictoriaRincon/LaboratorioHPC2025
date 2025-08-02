@@ -11,7 +11,7 @@ using namespace std;
 
 // Constantes energéticas
 const double POT_GAS1 = 171;
-const double POT_GAS2 = 171+171;
+const double POT_GAS2 = 171 + 171;
 const double POT_VAPOR = 563;
 const double CONSUMO_GN_M3PKWH = 0.167 / 0.717;
 const double COSTO_GN_USD_M3 = 618;
@@ -46,7 +46,7 @@ std::vector<double> generar_demanda_aleatoria()
 {
     std::vector<double> datos;
     std::srand(static_cast<unsigned int>(std::time(nullptr))); // Semilla aleatoria
-    for (int dias = 0; dias < 7; ++dias)
+    for (int dias = 0; dias < 1; ++dias)
     {
         for (int h = 0; h < 24; ++h)
         {
@@ -76,10 +76,17 @@ int main(int argc, char **argv)
         MPI_Finalize();
         return 1;
     }
+    std::ofstream archivo_resultado;
+    long costo_total_operacion = 0.0;
+    if (rank == 0)
+    {
+        archivo_resultado.open("seleccion_maquinas.csv");
+        archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
+    }
 
-    std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
+    // std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
 
-    for (int eo = 0; eo <= 1464; ++eo)
+    for (int eo = 0; eo <= 0; ++eo) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
@@ -116,9 +123,6 @@ int main(int argc, char **argv)
             else if (rank == 3)
                 potencia_disponible = std::numeric_limits<double>::max();
 
-            // Aca le paso a calculador_costos y tengo que cambiarlo para que reciba la potencia, pero despues haga todos los mismos calculos
-            // Complejizarlo para que tenga una justificacion la division de las maquinas
-
             if (demanda_h <= 0.0)
             {
                 horas_apagada++;
@@ -128,7 +132,8 @@ int main(int argc, char **argv)
             }
             else
             {
-                respuesta = calcular_costo(eo, demanda_h,h, potencia_disponible, horas_apagada);
+                respuesta = calcular_costo(eo, demanda_h, h, potencia_disponible, horas_apagada);
+                horas_apagada = 0; // Reseteamos horas apagada
             }
 
             std::vector<RespuestaMaquina> respuestas(size);
@@ -139,17 +144,36 @@ int main(int argc, char **argv)
             if (rank == 0)
             {
                 double costo_total = 0;
+                int mejor_proceso = -1;
+                double horas_encendida = 0;
+                double menor_costo = std::numeric_limits<double>::max();
+
                 for (int i = 0; i < size; ++i)
                 {
                     std::cout << "Proceso " << i
                               << " kWh | Costo: " << respuestas[i].costo << " USD"
                               << (respuestas[i].encendida ? " [ON]\n" : " [OFF]\n");
-                    costo_total += respuestas[i].costo;
+                    // Obtengo el de menor costo
+                    if (respuestas[i].costo < menor_costo && respuestas[i].encendida > 0)
+                    {
+                        menor_costo = respuestas[i].costo;
+                        mejor_proceso = i;
+                        horas_encendida = respuestas[i].encendida;
+                    }
                 }
-                std::cout << " | Costo total: " << costo_total << " USD\n";
-            } // Aca tengo que ver cual fue de menor costo y quedarme con esa
+
+                if (mejor_proceso != -1)
+                {
+                    costo_total += menor_costo;
+                    std::cout << " | Costo total: " << costo_total << " USD\n";
+                    archivo_resultado << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
+                }
+                costo_total_operacion += costo_total;
+            }
         }
     }
+    if (rank == 0)
+        archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
 
     MPI_Finalize();
     return 0;

@@ -8,7 +8,7 @@
 using namespace std;
 
 const double BASE_COSTO_ARRANQUE = 4208.0;
-const double MULT_COSTO_GN = 5.110;
+const double MULT_COSTO_GN = 51.10;
 const double DENSIDAD_GN = 0.717;                           // kg/m3 (valor aproximado)
 const double CONSUMO_GN_GPKWH = 167;                        // gramos de GN por kWh
 const double CONSUMO_GN_KGPKWH = CONSUMO_GN_GPKWH / 1000.0; // g/kWh a kg/kWh
@@ -35,6 +35,7 @@ RespuestaMaquina calcular_costo(double esc, double demanda_h, double hora, doubl
   else if (horas_apagada > 2)
     tipo_arranque = 0.5;
 
+  respuesta.encendida = 1;
   if (horas_apagada > 0)
   {
     double costo_mantener = POTENCIA_MINIMA * CONSUMO_GN_M3PKWH * COSTO_GN_USD_M3 * horas_apagada;
@@ -45,8 +46,8 @@ RespuestaMaquina calcular_costo(double esc, double demanda_h, double hora, doubl
                 << " conviene mantener prendida (costo mantener: "
                 << costo_mantener << " < arranque: "
                 << COSTO_ARRANQUE << ")\n";
-      respuesta.encendida = horas_apagada + 1; // Marca que la máquina estuvo encendida
-      horas_apagada = 0;                       // Reseteamos horas apagada
+      respuesta.encendida += horas_apagada; // Marca que la máquina estuvo encendida
+      respuesta.costo += costo_mantener;
     }
     else
     {
@@ -54,10 +55,12 @@ RespuestaMaquina calcular_costo(double esc, double demanda_h, double hora, doubl
                 << " conviene mantener apagada (costo mantener: "
                 << costo_mantener << " > arranque: "
                 << COSTO_ARRANQUE << ")\n";
-      respuesta.encendida = 1;
+      respuesta.costo += (COSTO_ARRANQUE * tipo_arranque);
     }
   }
 
+  if (hora == 0) respuesta.costo += COSTO_ARRANQUE;
+  
   // Costo de operación por hora
   double consumo_gn_m3 = demanda_h * CONSUMO_GN_M3PKWH;
   respuesta.costo += consumo_gn_m3 * COSTO_GN_USD_M3;
@@ -66,9 +69,9 @@ RespuestaMaquina calcular_costo(double esc, double demanda_h, double hora, doubl
   double tiempo_subida = demanda_h / POTENCIA_SUBIDA; // en minutos
   int horas_subida = static_cast<int>(ceil(tiempo_subida / 60.0));
 
-  if (horas_apagada != 0)
+  if(respuesta.encendida < horas_subida)
   {
-    respuesta.costo += (COSTO_ARRANQUE * tipo_arranque);
+    respuesta.encendida += horas_subida; // Marca que la máquina estuvo encendida
   }
 
   return respuesta;
