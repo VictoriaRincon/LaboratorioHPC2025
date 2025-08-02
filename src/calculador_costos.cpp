@@ -147,6 +147,8 @@ vector<bool> *calcular_costo(double esc)
                   << " conviene mantener prendida (costo mantener: "
                   << costo_mantener << " < arranque: "
                   << COSTO_ARRANQUE << ")\n";
+        costo_operacion += costo_mantener;
+
         horas_apagada = 0; // Reseteamos horas apagada
         continue;          // ya está todo marcado, salteamos lógica de encendido
       }
@@ -156,8 +158,11 @@ vector<bool> *calcular_costo(double esc)
                   << " conviene mantener apagada (costo mantener: "
                   << costo_mantener << " > arranque: "
                   << COSTO_ARRANQUE << ")\n";
+        costo_operacion += (COSTO_ARRANQUE * tipo_arranque);
       }
     }
+
+    if (h == 0) costo_operacion += COSTO_ARRANQUE;
 
     // Costo de operación por hora
     double consumo_gn_m3 = demanda_sin_abastecer * CONSUMO_GN_M3PKWH;
@@ -167,9 +172,14 @@ vector<bool> *calcular_costo(double esc)
     double tiempo_subida = demanda_sin_abastecer / POTENCIA_SUBIDA; // en minutos
     int horas_subida = static_cast<int>(ceil(tiempo_subida / 60.0));
 
-    if ((h == 0 && (*encender)[h]) || (!(*encender)[h - 1]))
+    // Marca las horas anteriores como encendidas si es necesario
+    for (int k = 0; k < horas_subida; ++k)
     {
-      costo_operacion += (COSTO_ARRANQUE * tipo_arranque);
+      int hora_encender = h - k;
+      if (hora_encender >= 0)
+      {
+        (*encender)[hora_encender] = true;
+      }
     }
 
     // Lógica simple: si hay demanda, prendemos la máquina y aceptamos el costo
