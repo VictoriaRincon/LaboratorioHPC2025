@@ -78,13 +78,17 @@ int main(int argc, char **argv)
     }
     std::ofstream archivo_resultado;
     long costo_total_operacion = 0.0;
+    std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
+    // std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
+    // VER SI SE PUEDEN IMPRIMIR TODAS LAS HORAS
+    std::chrono::time_point<std::chrono::high_resolution_clock> fin;
+    std::chrono::time_point<std::chrono::high_resolution_clock> inicio;
     if (rank == 0)
     {
+        inicio = std::chrono::high_resolution_clock::now();
         archivo_resultado.open("seleccion_maquinas.csv");
         archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
     }
-
-    // std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
 
     for (int eolica = 1494; eolica <= 1494; ++eolica) // Maxima eolica 1464
     {
@@ -165,6 +169,7 @@ int main(int argc, char **argv)
                 {
                     costo_total += menor_costo;
                     std::cout << " | Costo total: " << costo_total << " USD\n";
+
                     archivo_resultado << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
                 }
                 costo_total_operacion += costo_total;
@@ -172,7 +177,13 @@ int main(int argc, char **argv)
         }
     }
     if (rank == 0)
+    {
         archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
+
+        fin = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duracion = fin - inicio;
+        std::cout << "Tiempo de ejecución: " << duracion.count() << " segundos\n";
+    }
 
     MPI_Finalize();
     return 0;
