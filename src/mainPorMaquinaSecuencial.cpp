@@ -80,9 +80,6 @@ int main()
         for (int h = 0; h < demanda.size(); ++h)
         {
             double demanda_h = demanda[h];
-            std::cout << "\nHora " << h
-                      << " - Demanda original: " << demanda_h
-                      << " kWh | Eólica disponible: " << eolica << " kWh" << std::endl;
             demanda_h -= eolica;
             if (demanda_h < 0)
                 demanda_h = 0;
@@ -95,8 +92,6 @@ int main()
             if (demanda_h <= 0.0)
             {
                 horas_apagada++;
-                std::cout << "Horas apagadas:" + std::to_string(horas_apagada) << std::endl;
-
                 continue;
             }
             else
@@ -115,9 +110,6 @@ int main()
 
             for (int i = 0; i < 4; ++i)
             {
-                std::cout << "Proceso " << i
-                          << " kWh | Costo: " << respuestas[i].costo << " USD"
-                          << (respuestas[i].encendida ? " [ON]\n" : " [OFF]\n");
                 // Obtengo el de menor costo
                 if (respuestas[i].costo < menor_costo && respuestas[i].encendida > 0)
                 {
