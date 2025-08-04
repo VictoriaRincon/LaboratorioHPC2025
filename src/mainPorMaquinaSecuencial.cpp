@@ -70,7 +70,7 @@ int main()
     std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
 
     archivo_resultado.open("seleccion_maquinas.csv");
-    archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
+    archivo_resultado << "Eolica,Hora,MaquinaSeleccionada(1-Gas1, 2-Gas2, 3-Vapor),Costo,Encendida\n";
 
     for (int eolica = 0; eolica <= 1494; ++eolica) // Maxima eolica 1464
     {
@@ -132,7 +132,7 @@ int main()
                 costo_total += menor_costo;
                 std::cout << " | Costo total: " << costo_total << " USD\n";
 
-                archivo_resultado << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
+                archivo_resultado << eolica << "," << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
             }
             costo_total_operacion += costo_total;
         }

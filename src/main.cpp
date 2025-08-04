@@ -7,6 +7,7 @@
 #include <string>
 #include <chrono>
 #include <ctime>
+
 #include "../include/calculador_costos_maquina.hpp"
 
 using namespace std;
@@ -87,11 +88,10 @@ int main(int argc, char **argv)
 
     MPI_Bcast(demanda.data(), cantidad_horas, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    //Puede ser (multiplo de 3)+1
-    if (size < 4)
+    if (size < 4 || (((size - 1) % 3) != 0))
     {
         if (rank == 0)
-            std::cerr << "Se requieren al menos 4 procesos.\n";
+            std::cerr << "Se requieren al menos 4 procesos y que sean multiplo de 3 + 1.\n";
         MPI_Finalize();
         return 1;
     }
@@ -104,40 +104,50 @@ int main(int argc, char **argv)
     {
         inicio = std::chrono::high_resolution_clock::now();
         archivo_resultado.open("seleccion_maquinas.csv");
-        archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
+        archivo_resultado << "Eolica,Hora,MaquinaSeleccionada(1-Gas1, 2-Gas2, 3-Vapor),Costo,Encendida\n";
     }
 
     for (int eolica = 0; eolica <= 1464; ++eolica) // Maxima eolica 1464
     {
-        std::string tipo_maquina;
+
         int horas_apagada = 0;
         double costo_operacion = 0.0;
+
         std::vector<RespuestaMaquina> respuestas_local(demanda.size(), {0, 0});
-
-        for (int h = 0; h < demanda.size(); ++h)
+        if (rank != 0)
         {
-            double demanda_h = demanda[h];
-
-            demanda_h -= eolica;
-            if (demanda_h < 0)
-                demanda_h = 0;
-
             double potencia_disponible = 0;
-            if (rank == 1)
+
+            int s = (size - 1) / 3;
+            int grupo = (rank - 1) / s; // 0: gas1, 1: gas2, 2: vapor
+            int idx_grupo = (rank - 1) % s;
+            int horas_por_proceso = cantidad_horas / s;
+            int resto = cantidad_horas % s;
+
+            // Calculá el rango exclusivo para cada proceso dentro del grupo:
+            int inicio = idx_grupo * horas_por_proceso + std::min(idx_grupo, resto);
+            int fin = inicio + horas_por_proceso + (idx_grupo < resto ? 1 : 0);
+
+            if (grupo == 0)
                 potencia_disponible = POT_GAS1;
-            else if (rank == 2)
+            else if (grupo == 1)
                 potencia_disponible = POT_GAS2;
-            else if (rank == 3)
+            else if (grupo == 2)
                 potencia_disponible = POT_VAPOR + POT_GAS1 + POT_GAS1;
 
-            if (rank != 0)
+            for (int h = inicio; h < fin; ++h)
             {
+
+                double demanda_h = demanda[h];
+
+                demanda_h -= eolica;
+                if (demanda_h < 0)
+                    demanda_h = 0;
+
                 if (demanda_h <= 0.0)
                 {
                     horas_apagada++;
                     respuestas_local[h] = {0, 0};
-                    std::cout << "Horas apagadas:" + std::to_string(horas_apagada) << std::endl;
-
                     continue;
                 }
                 else
@@ -164,9 +174,6 @@ int main(int argc, char **argv)
                 for (int i = 1; i < size; ++i)
                 {
                     const auto &resp = buffer[i * cantidad_horas + h];
-                    std::cout << "Proceso " << i
-                              << " kWh | Costo: " << resp.costo << " USD"
-                              << (resp.encendida ? " [ON]\n" : " [OFF]\n");
                     // Obtengo el de menor costo
                     if (resp.costo < menor_costo && resp.encendida > 0)
                     {
@@ -179,9 +186,7 @@ int main(int argc, char **argv)
                 if (mejor_proceso != -1)
                 {
                     costo_total += menor_costo;
-                    std::cout << " | Costo total: " << costo_total << " USD\n";
-
-                    archivo_resultado << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
+                    archivo_resultado << eolica << "," << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
                 }
                 costo_total_operacion += costo_total;
             }
@@ -190,6 +195,7 @@ int main(int argc, char **argv)
     if (rank == 0)
     {
         archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
+        archivo_resultado.close();
 
         fin = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duracion = fin - inicio;

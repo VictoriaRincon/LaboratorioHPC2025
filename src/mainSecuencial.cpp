@@ -1,5 +1,5 @@
-#include "../include/calculador_costos.hpp"
 #include <iostream>
+#include "../include/calculador_costos.hpp"
 
 int main()
 {
@@ -16,13 +16,3 @@ int main()
   std::cout << "Tiempo transcurrido: " << duracion.count() << " segundos" << std::endl;
   return 0;
 }
-
-// int main() {
-//     int horas = 24;
-//     std::cout << "Valor de horas: " << horas << std::endl;
-
-// std::vector<bool>* encender = new std::vector<bool>(horas, false);
-//     std::cout << "Vector creado OK\n";
-
-//     return 0;
-// }
