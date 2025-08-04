@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     if (rank == 0)
     {
         inicio = std::chrono::high_resolution_clock::now();
-        archivo_resultado.open("seleccion_maquinas.csv");
+        archivo_resultado.open("../resultados/seleccion_maquinas.csv");
         archivo_resultado << "Eolica,Hora,MaquinaSeleccionada(1-Gas1, 2-Gas2, 3-Vapor),Costo,Encendida\n";
     }
 

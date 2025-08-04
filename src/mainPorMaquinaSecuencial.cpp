@@ -69,10 +69,10 @@ int main()
     long costo_total_operacion = 0.0;
     std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
 
-    archivo_resultado.open("seleccion_maquinas.csv");
+    archivo_resultado.open("../resultados/seleccion_maquinas_secuencial.csv");
     archivo_resultado << "Eolica,Hora,MaquinaSeleccionada(1-Gas1, 2-Gas2, 3-Vapor),Costo,Encendida\n";
 
-    for (int eolica = 0; eolica <= 1494; ++eolica) // Maxima eolica 1464
+    for (int eolica = 0; eolica <= 1464; ++eolica) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
