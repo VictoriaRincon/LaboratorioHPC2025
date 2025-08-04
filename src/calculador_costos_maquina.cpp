@@ -3,6 +3,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cmath>
+#include <limits>
 #include "../include/calculador_costos_maquina.hpp"
 
 using namespace std;

@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <ctime>
 
 #include "../include/calculador_costos_maquina.hpp"
 
