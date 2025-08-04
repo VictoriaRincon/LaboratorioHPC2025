@@ -72,7 +72,7 @@ int main()
     archivo_resultado.open("seleccion_maquinas.csv");
     archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
 
-    for (int eolica = 1494; eolica <= 1494; ++eolica) // Maxima eolica 1464
+    for (int eolica = 0; eolica <= 1494; ++eolica) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
@@ -139,7 +139,6 @@ int main()
     }
 
     archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
-    archivo_resultado.open("seleccion_maquinas.csv");
 
     auto fin = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duracion = fin - inicio;

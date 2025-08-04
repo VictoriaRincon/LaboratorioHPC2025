@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <chrono>
+#include <ctime>
 #include "../include/calculador_costos_maquina.hpp"
 
 using namespace std;
@@ -79,8 +81,6 @@ int main(int argc, char **argv)
     std::ofstream archivo_resultado;
     long costo_total_operacion = 0.0;
     std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
-    // std::vector<RespuestaMaquina> *encender = new std::vector<RespuestaMaquina>(demanda.size(), {0, 0});
-    // VER SI SE PUEDEN IMPRIMIR TODAS LAS HORAS
     std::chrono::time_point<std::chrono::high_resolution_clock> fin;
     std::chrono::time_point<std::chrono::high_resolution_clock> inicio;
     if (rank == 0)
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
         archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
     }
 
-    for (int eolica = 1494; eolica <= 1494; ++eolica) // Maxima eolica 1464
+    for (int eolica = 0; eolica <= 1494; ++eolica) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
