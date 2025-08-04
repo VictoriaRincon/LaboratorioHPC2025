@@ -6,7 +6,6 @@
 #include <sstream>
 #include <string>
 #include <chrono>
-#include <ctime>
 
 #include "../include/calculador_costos_maquina.hpp"
 
@@ -98,11 +97,9 @@ int main(int argc, char **argv)
     std::ofstream archivo_resultado;
     long costo_total_operacion = 0.0;
     std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
-    std::chrono::time_point<std::chrono::high_resolution_clock> fin, inicio;
 
     if (rank == 0)
     {
-        inicio = std::chrono::high_resolution_clock::now();
         archivo_resultado.open("../resultados/seleccion_maquinas.csv");
         archivo_resultado << "Eolica,Hora,MaquinaSeleccionada(1-Gas1, 2-Gas2, 3-Vapor),Costo,Encendida\n";
     }
@@ -196,10 +193,6 @@ int main(int argc, char **argv)
     {
         archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
         archivo_resultado.close();
-
-        fin = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duracion = fin - inicio;
-        std::cout << "Tiempo de ejecución: " << duracion.count() << " segundos\n";
     }
 
     MPI_Finalize();

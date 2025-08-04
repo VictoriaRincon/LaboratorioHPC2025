@@ -63,7 +63,6 @@ std::vector<double> generar_demanda_aleatoria()
 
 int main()
 {
-    auto inicio = std::chrono::high_resolution_clock::now();
     std::vector<double> demanda = obtener_demanda();
 
     std::ofstream archivo_resultado;
@@ -123,8 +122,6 @@ int main()
             if (mejor_proceso != -1)
             {
                 costo_total += menor_costo;
-                std::cout << " | Costo total: " << costo_total << " USD\n";
-
                 archivo_resultado << eolica << "," << h << "," << mejor_proceso << "," << menor_costo << "," << horas_encendida << "\n";
             }
             costo_total_operacion += costo_total;
@@ -132,10 +129,6 @@ int main()
     }
 
     archivo_resultado << "Costo total: " << costo_total_operacion << " USD\n";
-
-    auto fin = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duracion = fin - inicio;
-    std::cout << "Tiempo de ejecución: " << duracion.count() << " segundos\n";
 
     return 0;
 }
