@@ -69,8 +69,25 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<double> demanda = obtener_demanda();
+    std::vector<double> demanda;
+    int cantidad_horas;
 
+    if (rank == 0)
+    {
+        demanda = obtener_demanda();
+        cantidad_horas = demanda.size();
+    }
+
+    MPI_Bcast(&cantidad_horas, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank != 0)
+    {
+        demanda.resize(cantidad_horas);
+    }
+
+    MPI_Bcast(demanda.data(), cantidad_horas, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    //Puede ser (multiplo de 3)+1
     if (size < 4)
     {
         if (rank == 0)
@@ -81,8 +98,8 @@ int main(int argc, char **argv)
     std::ofstream archivo_resultado;
     long costo_total_operacion = 0.0;
     std::vector<std::tuple<double, double, double>> *encender = new std::vector<std::tuple<double, double, double>>(demanda.size(), {0, 0, 0});
-    std::chrono::time_point<std::chrono::high_resolution_clock> fin;
-    std::chrono::time_point<std::chrono::high_resolution_clock> inicio;
+    std::chrono::time_point<std::chrono::high_resolution_clock> fin, inicio;
+
     if (rank == 0)
     {
         inicio = std::chrono::high_resolution_clock::now();
@@ -90,78 +107,72 @@ int main(int argc, char **argv)
         archivo_resultado << "Hora,MaquinaSeleccionada,Costo,Encendida\n";
     }
 
-    for (int eolica = 0; eolica <= 1494; ++eolica) // Maxima eolica 1464
+    for (int eolica = 0; eolica <= 1464; ++eolica) // Maxima eolica 1464
     {
         std::string tipo_maquina;
         int horas_apagada = 0;
         double costo_operacion = 0.0;
+        std::vector<RespuestaMaquina> respuestas_local(demanda.size(), {0, 0});
+
         for (int h = 0; h < demanda.size(); ++h)
         {
             double demanda_h = demanda[h];
-            if (rank == 0)
-            {
-                std::cout << "\nHora " << h
-                          << " - Demanda original: " << demanda_h
-                          << " kWh | Eólica disponible: " << eolica << " kWh" << std::endl;
-            }
-            MPI_Bcast(&eolica, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
             demanda_h -= eolica;
             if (demanda_h < 0)
                 demanda_h = 0;
 
-            MPI_Bcast(&demanda_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-            RespuestaMaquina respuesta;
-            respuesta.costo = 0;
-            respuesta.encendida = 0;
-
             double potencia_disponible = 0;
-            if (rank == 0)
+            if (rank == 1)
                 potencia_disponible = POT_GAS1;
-            else if (rank == 1)
-                potencia_disponible = POT_GAS2;
             else if (rank == 2)
-                potencia_disponible = POT_VAPOR + POT_GAS1 + POT_GAS1;
+                potencia_disponible = POT_GAS2;
             else if (rank == 3)
-                potencia_disponible = std::numeric_limits<double>::max();
+                potencia_disponible = POT_VAPOR + POT_GAS1 + POT_GAS1;
 
-            if (demanda_h <= 0.0)
+            if (rank != 0)
             {
-                horas_apagada++;
-                std::cout << "Horas apagadas:" + std::to_string(horas_apagada) << std::endl;
+                if (demanda_h <= 0.0)
+                {
+                    horas_apagada++;
+                    respuestas_local[h] = {0, 0};
+                    std::cout << "Horas apagadas:" + std::to_string(horas_apagada) << std::endl;
 
-                continue;
+                    continue;
+                }
+                else
+                {
+                    respuestas_local[h] = calcular_costo(eolica, demanda_h, h, potencia_disponible, horas_apagada);
+                    horas_apagada = 0; // Reseteamos horas apagada
+                }
             }
-            else
-            {
-                respuesta = calcular_costo(eolica, demanda_h, h, potencia_disponible, horas_apagada);
-                horas_apagada = 0; // Reseteamos horas apagada
-            }
+        }
+        std::vector<RespuestaMaquina> buffer(size * demanda.size());
+        MPI_Gather(respuestas_local.data(), demanda.size() * sizeof(RespuestaMaquina), MPI_BYTE,
+                   buffer.data(), demanda.size() * sizeof(RespuestaMaquina), MPI_BYTE,
+                   0, MPI_COMM_WORLD);
 
-            std::vector<RespuestaMaquina> respuestas(size);
-            MPI_Gather(&respuesta, sizeof(RespuestaMaquina), MPI_BYTE,
-                       respuestas.data(), sizeof(RespuestaMaquina), MPI_BYTE,
-                       0, MPI_COMM_WORLD);
-
-            if (rank == 0)
+        if (rank == 0)
+        {
+            for (int h = 0; h < demanda.size(); ++h)
             {
                 double costo_total = 0;
                 int mejor_proceso = -1;
                 double horas_encendida = 0;
                 double menor_costo = std::numeric_limits<double>::max();
 
-                for (int i = 0; i < size; ++i)
+                for (int i = 1; i < size; ++i)
                 {
+                    const auto &resp = buffer[i * cantidad_horas + h];
                     std::cout << "Proceso " << i
-                              << " kWh | Costo: " << respuestas[i].costo << " USD"
-                              << (respuestas[i].encendida ? " [ON]\n" : " [OFF]\n");
+                              << " kWh | Costo: " << resp.costo << " USD"
+                              << (resp.encendida ? " [ON]\n" : " [OFF]\n");
                     // Obtengo el de menor costo
-                    if (respuestas[i].costo < menor_costo && respuestas[i].encendida > 0)
+                    if (resp.costo < menor_costo && resp.encendida > 0)
                     {
-                        menor_costo = respuestas[i].costo;
+                        menor_costo = resp.costo;
                         mejor_proceso = i;
-                        horas_encendida = respuestas[i].encendida;
+                        horas_encendida = resp.encendida;
                     }
                 }
 
